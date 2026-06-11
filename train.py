@@ -184,7 +184,7 @@ def plot_test_trajectory(
     baseline   = sliding_window_view(noisy, window).mean(axis=-1)
     t_pred     = t_ax[window - 1:]
     true_align = true[window - 1:]
-    rpm = lambda v: v * 60 / (2 * np.pi)
+    def rpm(v): return v * 60 / (2 * np.pi)
 
     fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
 
@@ -259,9 +259,8 @@ def main():
     # Datasets and loaders
     # ------------------------------------------------------------------
     W = args.window
-    mk_ds = lambda noisy, true, volt: BDCFilterDataset(
-        stats.norm_noisy(noisy), stats.norm_true(true), stats.norm_volt(volt), W
-    )
+    def mk_ds(noisy, true, volt):
+        return BDCFilterDataset(stats.norm_noisy(noisy), stats.norm_true(true), stats.norm_volt(volt), W)
     tr_ds = mk_ds(split.train_noisy,  split.train_true,  split.train_voltage)
     va_ds = mk_ds(split.val_noisy,    split.val_true,    split.val_voltage)
     te_ds = mk_ds(split.test_noisy,   split.test_true,   split.test_voltage)
@@ -288,7 +287,7 @@ def main():
     # Evaluate
     # ------------------------------------------------------------------
     test_rmse, test_rmse_rpm = evaluate(model, te_ds, stats, device)
-    print(f"\nResults (test set)")
+    print("\nResults (test set)")
     print(f"  {args.model.upper()} filter : {test_rmse:.2f} rad/s  |  {test_rmse_rpm:.1f} RPM")
     print(f"  MA baseline  : {base_rmse:.2f} rad/s  |  {base_rmse*60/(2*np.pi):.1f} RPM")
     impr = 100 * (1 - test_rmse / base_rmse)
