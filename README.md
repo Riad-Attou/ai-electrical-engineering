@@ -28,18 +28,18 @@ test_simulated_dataset/   Separate MATLAB/Simulink project (different assignment
 
 ## Install
 
-```bash
-# PyTorch with CUDA 12.6 (RTX 4060 / any Ampere or Ada GPU with driver >= 525)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+Create a virtual environment first (required on Arch Linux and recommended everywhere):
 
-# NumPy and Matplotlib are already required by the simulation
-pip install numpy matplotlib
+```bash
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 ```
 
-> **CPU-only fallback** (no GPU):
-> ```bash
-> pip install torch --index-url https://download.pytorch.org/whl/cpu
-> ```
+Install PyTorch for your hardware — use the [official selector](https://pytorch.org/get-started/locally/) to get the right command (CPU / CUDA / ROCm). Then install the remaining dependencies:
+
+```bash
+pip install numpy matplotlib
+```
 
 ---
 
