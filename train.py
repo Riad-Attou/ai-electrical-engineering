@@ -217,6 +217,7 @@ def plot_test_trajectory(
     traj_idx: int = 0,
     device: str = "cpu",
     save_dir: Path = Path("figures"),
+    use_voltage: bool = True,
 ):
     """Plot noisy / moving-avg baseline / model / true for one test trajectory."""
     n = traj_idx
@@ -228,8 +229,11 @@ def plot_test_trajectory(
 
     # Build all input windows for this trajectory efficiently
     win_noisy = sliding_window_view(stats.norm_noisy(noisy), window)  # (T-W+1, W)
-    win_volt = sliding_window_view(stats.norm_volt(volt), window)
-    x = np.stack([win_noisy, win_volt], axis=-1).astype(np.float32)  # (T-W+1, W, 2)
+    if use_voltage:
+        win_volt = sliding_window_view(stats.norm_volt(volt), window)
+        x = np.stack([win_noisy, win_volt], axis=-1).astype(np.float32)  # (T-W+1, W, 2)
+    else:
+        x = win_noisy[:, :, np.newaxis].astype(np.float32)               # (T-W+1, W, 1)
 
     model.eval()
     with torch.no_grad():
@@ -399,7 +403,8 @@ def main():
     # ------------------------------------------------------------------
     plot_training_curves(history, label, save_dir=figures)
     plot_test_trajectory(model, split, stats, W, label,
-                         device=device, save_dir=figures)
+                         device=device, save_dir=figures,
+                         use_voltage=not args.no_voltage)
 
 
 if __name__ == "__main__":
