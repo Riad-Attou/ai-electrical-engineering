@@ -1,11 +1,18 @@
 """
 Brushed DC Motor — simulation and dataset generation for speed-filter training
+
+Demos
+-----
+demo_raw_physics()   — single step-voltage run, shows current / speed / position
+demo_dataset()       — original single-trajectory dataset (quick sanity check)
+demo_ml_dataset()    — multi-trajectory dataset split by trajectory for AI training
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from utils.motor import BDCMotor, BDCMotorParams, SpeedSensorNoise, generate_dataset
+from utils.traj import TrajectoryConfig, generate_multi_trajectory_dataset, split_trajectories, pack_split
 
 
 PARAMS = BDCMotorParams(
@@ -81,6 +88,71 @@ def demo_dataset():
 
 
 
+# ---------------------------------------------------------------------------
+# 3. Multi-trajectory dataset — proper AI training setup
+# ---------------------------------------------------------------------------
+
+def demo_ml_dataset():
+    """
+    Generate 200 independent trajectories with varied motor params, noise, and
+    voltage profiles, then split them 70/15/15 by trajectory index.
+
+    This is the recommended starting point for training a speed filter
+    (TCN, 1D CNN, GRU, etc.).  The saved motor_split.npz has arrays shaped
+    (N_trajectories, T_steps) — window along the T axis inside each trajectory
+    when building a PyTorch / TF Dataset, never across trajectories.
+    """
+    config = TrajectoryConfig(
+        n_trajectories=200,
+        t_end=10.0,
+        dt=1e-3,
+        param_jitter=0.15,          # ±15 % on R, J, B → unit-to-unit tolerance
+        noise_std_range=(5.0, 30.0),
+        noise_quant_range=(0.0, 5.0),
+        train_frac=0.70,
+        val_frac=0.15,
+    )
+
+    print("Generating trajectories …", flush=True)
+    trajectories = generate_multi_trajectory_dataset(base_params=PARAMS, config=config, seed=0)
+
+    train, val, test = split_trajectories(trajectories, config=config, seed=42)
+    split = pack_split(train, val, test, dt=config.dt)
+    split.save("motor_split.npz")
+
+    T = split.train_noisy.shape[1]
+    n_tr, n_va, n_te = len(train), len(val), len(test)
+    print(f"\n[ml-dataset] {config.n_trajectories} trajectories × {T} steps  ({config.t_end} s @ {config.dt*1e3:.0f} ms)")
+    print(f"  Train  {split.train_noisy.shape}   {n_tr} trajectories")
+    print(f"  Val    {split.val_noisy.shape}    {n_va} trajectories")
+    print(f"  Test   {split.test_noisy.shape}    {n_te} trajectories")
+    print("  Saved → motor_split.npz")
+    print()
+    print("  Filter input  : split.train_noisy   (N, T)  noisy speed [rad/s]")
+    print("  Filter target : split.train_true    (N, T)  true  speed [rad/s]")
+    print("  Extra feature : split.train_voltage (N, T)  voltage     [V]")
+
+    # Show 4 sample training trajectories
+    t_axis    = np.arange(T) * config.dt
+    rpm_noisy = split.train_noisy[:4] * 60 / (2 * np.pi)
+    rpm_true  = split.train_true[:4]  * 60 / (2 * np.pi)
+
+    fig, axes = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
+    for ax, i in zip(axes, range(4)):
+        ax.plot(t_axis, rpm_noisy[i], alpha=0.45, color="C0",
+                label="noisy" if i == 0 else None)
+        ax.plot(t_axis, rpm_true[i],  lw=1.5, color="C1",
+                label="true"  if i == 0 else None)
+        ax.set_ylabel(f"Traj {i} (RPM)")
+        ax.grid(True)
+    axes[0].set_title("Sample training trajectories — noisy vs true speed")
+    axes[0].legend()
+    axes[-1].set_xlabel("Time (s)")
+    plt.tight_layout()
+    plt.show()
+
+
 if __name__ == "__main__":
     demo_raw_physics()
     demo_dataset()
+    demo_ml_dataset()
