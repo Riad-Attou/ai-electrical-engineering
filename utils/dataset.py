@@ -75,15 +75,17 @@ class BDCFilterDataset(Dataset):
         omega_true:  np.ndarray,
         voltage:     np.ndarray,
         window:      int,
+        use_voltage: bool = True,
     ):
         super().__init__()
         N, T = omega_noisy.shape
         assert window <= T, f"window ({window}) > trajectory length ({T})"
 
-        self._noisy   = omega_noisy.astype(np.float32)
-        self._true    = omega_true.astype(np.float32)
-        self._voltage = voltage.astype(np.float32)
-        self._W       = window
+        self._noisy       = omega_noisy.astype(np.float32)
+        self._true        = omega_true.astype(np.float32)
+        self._voltage     = voltage.astype(np.float32)
+        self._W           = window
+        self._use_voltage = use_voltage
 
         # Flat index as numpy arrays for memory efficiency
         n_win = T - window + 1
@@ -95,10 +97,13 @@ class BDCFilterDataset(Dataset):
         return len(self._traj)
 
     def __getitem__(self, idx: int):
-        n   = int(self._traj[idx])
-        t   = int(self._tend[idx])
-        W   = self._W
-        x   = np.stack([self._noisy[n, t - W : t],
-                         self._voltage[n, t - W : t]], axis=-1)  # (W, 2)
-        y   = self._true[n, t - 1]
+        n = int(self._traj[idx])
+        t = int(self._tend[idx])
+        W = self._W
+        noisy_win = self._noisy[n, t - W : t]
+        if self._use_voltage:
+            x = np.stack([noisy_win, self._voltage[n, t - W : t]], axis=-1)  # (W, 2)
+        else:
+            x = noisy_win[:, np.newaxis]   # (W, 1)
+        y = self._true[n, t - 1]
         return torch.from_numpy(x), torch.tensor(y)
