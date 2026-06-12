@@ -14,17 +14,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from utils.motor import BDCMotor, BDCMotorParams, SpeedSensorNoise, generate_dataset
-
-FIGURES = Path("figures")
-DATA    = Path("data")
-FIGURES.mkdir(exist_ok=True)
-DATA.mkdir(exist_ok=True)
 from utils.traj import (
     TrajectoryConfig,
     generate_multi_trajectory_dataset,
     pack_split,
     split_trajectories,
 )
+
+FIGURES = Path("figures")
+DATA = Path("data")
+FIGURES.mkdir(exist_ok=True)
+DATA.mkdir(exist_ok=True)
+
 
 PARAMS = BDCMotorParams(R=1.0, L=0.5e-3, Kt=0.01, Kb=0.01, J=1e-5, B=1e-6, V_max=12.0)
 NOISE = SpeedSensorNoise(std=15.0, quantization=3, rng=np.random.default_rng(42))

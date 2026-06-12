@@ -12,6 +12,7 @@ Kalman: Steady-state linear Kalman filter using the nominal BDC motor model.
 """
 
 from __future__ import annotations
+
 import numpy as np
 from scipy.linalg import expm, solve_discrete_are
 from scipy.signal import lfilter
@@ -19,10 +20,10 @@ from scipy.signal import lfilter
 from utils.motor import BDCMotorParams
 from utils.traj import MotorSplit
 
-
 # ---------------------------------------------------------------------------
 # EMA
 # ---------------------------------------------------------------------------
+
 
 def _ema(noisy: np.ndarray, alpha: float) -> np.ndarray:
     """Causal EMA via IIR filter. noisy: (N, T) or (T,). Returns same shape."""
@@ -31,20 +32,22 @@ def _ema(noisy: np.ndarray, alpha: float) -> np.ndarray:
 
 def ema_rmse(split: MotorSplit, alpha: float, on: str = "test") -> float:
     noisy = getattr(split, f"{on}_noisy")
-    true  = getattr(split, f"{on}_true")
+    true = getattr(split, f"{on}_true")
     return float(np.sqrt(np.mean((_ema(noisy, alpha) - true) ** 2)))
 
 
 def optimize_ema(split: MotorSplit, n_grid: int = 60) -> tuple[float, float]:
     """Grid search over alpha on the val set. Returns (best_alpha, val_rmse)."""
-    candidates = [(a, ema_rmse(split, a, on="val"))
-                  for a in np.linspace(0.50, 0.999, n_grid)]
+    candidates = [
+        (a, ema_rmse(split, a, on="val")) for a in np.linspace(0.50, 0.999, n_grid)
+    ]
     return min(candidates, key=lambda x: x[1])
 
 
 # ---------------------------------------------------------------------------
 # Kalman filter
 # ---------------------------------------------------------------------------
+
 
 def _discretize_motor(params: BDCMotorParams, dt: float):
     """
@@ -58,10 +61,8 @@ def _discretize_motor(params: BDCMotorParams, dt: float):
     which avoids the instability of Euler discretization when dt > 2·τ_electrical
     (τ_e = L/R = 0.5 ms here, dt = 1 ms → Euler would be unstable).
     """
-    R, L, Kt, Kb, J, B = (params.R, params.L, params.Kt,
-                           params.Kb, params.J, params.B)
-    A_c = np.array([[-R / L, -Kb / L],
-                    [Kt / J, -B  / J]])
+    R, L, Kt, Kb, J, B = (params.R, params.L, params.Kt, params.Kb, params.J, params.B)
+    A_c = np.array([[-R / L, -Kb / L], [Kt / J, -B / J]])
     A_d = expm(A_c * dt)
     B_c = np.array([1.0 / L, 0.0])
     B_d = np.linalg.solve(A_c, (A_d - np.eye(2)) @ B_c)
@@ -69,11 +70,11 @@ def _discretize_motor(params: BDCMotorParams, dt: float):
 
 
 def kalman_rmse(
-    split:  MotorSplit,
+    split: MotorSplit,
     params: BDCMotorParams,
     Q_diag: tuple[float, float] = (10.0, 1.0),
-    R_var:  float               = 300.0,
-    on:     str                 = "test",
+    R_var: float = 300.0,
+    on: str = "test",
 ) -> float:
     """
     Steady-state Kalman filter RMSE.
@@ -90,26 +91,26 @@ def kalman_rmse(
     Vectorised over the N test trajectories for speed.
     """
     A_d, B_d = _discretize_motor(params, split.dt)
-    C   = np.array([[0.0, 1.0]])   # observe ω
-    Q   = np.diag(Q_diag)
+    C = np.array([[0.0, 1.0]])  # observe ω
+    Q = np.diag(Q_diag)
     R_m = np.array([[R_var]])
 
     # Solve discrete algebraic Riccati equation for steady-state P
     P_ss = solve_discrete_are(A_d.T, C.T, Q, R_m)
     K_ss = (P_ss @ C.T @ np.linalg.inv(C @ P_ss @ C.T + R_m)).flatten()  # (2,)
 
-    noisy = getattr(split, f"{on}_noisy")    # (N, T)
-    true  = getattr(split, f"{on}_true")
-    volt  = getattr(split, f"{on}_voltage")
-    N, T  = noisy.shape
+    noisy = getattr(split, f"{on}_noisy")  # (N, T)
+    true = getattr(split, f"{on}_true")
+    volt = getattr(split, f"{on}_voltage")
+    N, T = noisy.shape
 
-    x     = np.zeros((N, 2))                 # initial state
+    x = np.zeros((N, 2))  # initial state
     preds = np.empty((N, T), dtype=np.float32)
 
     for t in range(T):
-        x_pred     = x @ A_d.T + np.outer(volt[:, t], B_d)   # (N, 2)
-        innov      = noisy[:, t] - x_pred[:, 1]               # (N,)
-        x          = x_pred + np.outer(innov, K_ss)           # (N, 2)
+        x_pred = x @ A_d.T + np.outer(volt[:, t], B_d)  # (N, 2)
+        innov = noisy[:, t] - x_pred[:, 1]  # (N,)
+        x = x_pred + np.outer(innov, K_ss)  # (N, 2)
         preds[:, t] = x[:, 1]
 
     return float(np.sqrt(np.mean((preds - true) ** 2)))
@@ -119,8 +120,9 @@ def kalman_rmse(
 # Convenience: run all non-learned baselines at once
 # ---------------------------------------------------------------------------
 
+
 def run_all_baselines(
-    split:  MotorSplit,
+    split: MotorSplit,
     params: BDCMotorParams,
     ma_window: int = 64,
 ) -> dict[str, float]:
@@ -132,8 +134,10 @@ def run_all_baselines(
     from numpy.lib.stride_tricks import sliding_window_view
 
     # MA (already computed in train.py, reproduced here for the dict)
-    win  = sliding_window_view(split.test_noisy, ma_window, axis=1)
-    ma_rmse = float(np.sqrt(np.mean((win.mean(axis=-1) - split.test_true[:, ma_window - 1:]) ** 2)))
+    win = sliding_window_view(split.test_noisy, ma_window, axis=1)
+    ma_rmse = float(
+        np.sqrt(np.mean((win.mean(axis=-1) - split.test_true[:, ma_window - 1 :]) ** 2))
+    )
 
     # EMA — find best alpha on val
     best_alpha, _ = optimize_ema(split)
@@ -145,5 +149,5 @@ def run_all_baselines(
     return {
         f"MA  (window={ma_window})": ma_rmse,
         f"EMA (α={best_alpha:.3f})": ema_test,
-        "Kalman (nominal model)":    kf_test,
+        "Kalman (nominal model)": kf_test,
     }

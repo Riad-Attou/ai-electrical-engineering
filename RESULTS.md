@@ -10,8 +10,8 @@
 |---|---|
 | R, L, Kt, Kb, J, B | 1.0 Ω, 0.5 mH, 0.01 N·m/A, 0.01 V·s/rad, 1×10⁻⁵ kg·m², 1×10⁻⁶ N·m·s/rad |
 | Steady-state speed (12 V) | ~11 346 RPM |
-| Mechanical time constant τ_m | ~9 ms |
-| Electrical time constant τ_e | 0.5 ms |
+| Mechanical time constant τ_m | ~100 ms  (= J·R / Kt·Kb, back-EMF dominated) |
+| Electrical time constant τ_e | 0.5 ms   (= L / R) |
 
 **Dataset**
 
@@ -65,7 +65,7 @@ The **EMA** with optimal α = 0.804 has an effective memory of only ~5 steps (5 
 
 The **Kalman filter** (3.82 rad/s) represents the optimal linear estimator given the nominal motor model. It uses both noisy speed measurements and the applied voltage as inputs, with a gain computed from the discrete Riccati equation. This is what a control engineer would deploy.
 
-The CNN (RF = 15 ms, 3.75 rad/s) approximately matches the Kalman by chance — its limited receptive field prevents it from exploiting the motor's 9 ms time constant properly, but the result is coincidentally similar.
+The CNN (RF = 15 ms, 3.75 rad/s) approximately matches the Kalman by chance — its limited receptive field (15 ms) covers only ~15% of the motor's mechanical time constant (τ_m ≈ 100 ms), preventing it from exploiting slow dynamics, but the result is coincidentally similar.
 
 ### 3. Voltage is the key differentiator
 
@@ -74,7 +74,7 @@ The CNN (RF = 15 ms, 3.75 rad/s) approximately matches the Kalman by chance — 
 | GRU with voltage | 2.12 rad/s |
 | GRU without voltage | 3.98 rad/s |
 
-Removing the voltage feature degrades the GRU by **88 %** in absolute terms, dropping it from comfortably above Kalman to approximately equal to it (3.98 vs 3.82). This is physically interpretable: voltage is the causal input driving the motor dynamics. Knowing the current command lets the model anticipate the speed response rather than react to it after the fact.
+Removing the voltage feature degrades the GRU by **88 % relatively** (2.12 → 3.98 rad/s), dropping it from comfortably above Kalman to just below it (3.98 vs 3.82). This is physically interpretable: voltage is the causal input driving the motor dynamics. Knowing the current command lets the model anticipate the speed response rather than react to it after the fact.
 
 **GRU_NOVOLT ≈ Kalman** (3.98 vs 3.82): without the voltage input, the GRU effectively rediscovers the Kalman filter from data alone.
 
@@ -89,7 +89,7 @@ The **GRU with voltage** (2.12 rad/s) outperforms the Kalman filter (3.82 rad/s)
 | Plain CNN | 15 ms | 3.75 rad/s |
 | TCN (dilated) | 91 ms | 2.18 rad/s |
 
-Extending the CNN receptive field from 15 ms to 91 ms — enough to cover the mechanical time constant — drops the error from 3.75 to 2.18 rad/s and brings the TCN to parity with the GRU. The limiting factor for the plain CNN was not the architecture but the inability to see far enough back in time.
+Extending the CNN receptive field from 15 ms to 91 ms — covering ~92% of the 100 ms mechanical time constant — drops the error from 3.75 to 2.18 rad/s and brings the TCN to parity with the GRU. The limiting factor for the plain CNN was not the architecture but the inability to see far enough back in time.
 
 ---
 

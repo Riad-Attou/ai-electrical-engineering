@@ -24,7 +24,7 @@ class _TCNBlock(nn.Module):
         super().__init__()
         self.conv1 = _CausalConv1d(channels, channels, kernel_size, dilation)
         self.conv2 = _CausalConv1d(channels, channels, kernel_size, dilation)
-        self.drop  = nn.Dropout(dropout)
+        self.drop = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.drop(F.relu(self.conv1(x)))
@@ -49,26 +49,28 @@ class TCNFilter(nn.Module):
 
     def __init__(
         self,
-        input_size: int   = 2,
-        channels:   int   = 32,
-        kernel_size: int  = 4,
-        n_levels:   int   = 4,
-        dropout:    float = 0.0,
+        input_size: int = 2,
+        channels: int = 32,
+        kernel_size: int = 4,
+        n_levels: int = 4,
+        dropout: float = 0.0,
     ):
         super().__init__()
         self.input_proj = nn.Conv1d(input_size, channels, 1)
-        self.blocks = nn.Sequential(*[
-            _TCNBlock(channels, kernel_size, dilation=2 ** i, dropout=dropout)
-            for i in range(n_levels)
-        ])
+        self.blocks = nn.Sequential(
+            *[
+                _TCNBlock(channels, kernel_size, dilation=2**i, dropout=dropout)
+                for i in range(n_levels)
+            ]
+        )
         self.head = nn.Linear(channels, 1)
-        self._rf = 1 + 2 * (kernel_size - 1) * (2 ** n_levels - 1)
+        self._rf = 1 + 2 * (kernel_size - 1) * (2**n_levels - 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.permute(0, 2, 1)      # (B, input_size, W)
-        x = self.input_proj(x)      # (B, channels, W)
-        x = self.blocks(x)          # (B, channels, W)
-        return self.head(x[:, :, -1]).squeeze(-1)   # (B,)
+        x = x.permute(0, 2, 1)  # (B, input_size, W)
+        x = self.input_proj(x)  # (B, channels, W)
+        x = self.blocks(x)  # (B, channels, W)
+        return self.head(x[:, :, -1]).squeeze(-1)  # (B,)
 
     @property
     def receptive_field(self) -> int:

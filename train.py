@@ -45,19 +45,31 @@ from utils.traj import MotorSplit
 # ---------------------------------------------------------------------------
 
 # Base motor params — used by the Kalman filter baseline
-_BASE_PARAMS = BDCMotorParams(R=1.0, L=0.5e-3, Kt=0.01, Kb=0.01, J=1e-5, B=1e-6, V_max=12.0)
+_BASE_PARAMS = BDCMotorParams(
+    R=1.0, L=0.5e-3, Kt=0.01, Kb=0.01, J=1e-5, B=1e-6, V_max=12.0
+)
 
 
 def build_model(args: argparse.Namespace) -> nn.Module:
     in_size = 1 if args.no_voltage else 2
     if args.model == "gru":
-        return GRUFilter(input_size=in_size, hidden_size=args.hidden, num_layers=args.layers)
+        return GRUFilter(
+            input_size=in_size, hidden_size=args.hidden, num_layers=args.layers
+        )
     if args.model == "cnn":
-        return CNNFilter(input_size=in_size, channels=args.channels,
-                         kernel_size=args.kernel, depth=args.depth)
+        return CNNFilter(
+            input_size=in_size,
+            channels=args.channels,
+            kernel_size=args.kernel,
+            depth=args.depth,
+        )
     if args.model == "tcn":
-        return TCNFilter(input_size=in_size, channels=args.tcn_channels,
-                         kernel_size=args.tcn_kernel, n_levels=args.tcn_levels)
+        return TCNFilter(
+            input_size=in_size,
+            channels=args.tcn_channels,
+            kernel_size=args.tcn_kernel,
+            n_levels=args.tcn_levels,
+        )
     raise ValueError(f"Unknown model '{args.model}'. Choose gru / cnn / tcn.")
 
 
@@ -67,17 +79,17 @@ def build_model(args: argparse.Namespace) -> nn.Module:
 
 
 def plot_training_curves(
-    history:    dict,
+    history: dict,
     model_name: str,
-    save_dir:   Path = Path("figures"),
+    save_dir: Path = Path("figures"),
 ):
-    epochs     = np.arange(1, len(history["train"]) + 1)
+    epochs = np.arange(1, len(history["train"]) + 1)
     train_rmse = np.sqrt(history["train"])
-    val_rmse   = np.sqrt(history["val"])
+    val_rmse = np.sqrt(history["val"])
 
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(epochs, train_rmse, label="train")
-    ax.plot(epochs, val_rmse,   label="val")
+    ax.plot(epochs, val_rmse, label="val")
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Normalized RMSE")
     ax.set_title(f"{model_name} — training curves")
@@ -95,10 +107,10 @@ def plot_training_curves(
 
 def moving_avg_rmse(split: MotorSplit, window: int) -> float:
     """Causal moving-average baseline RMSE on the test set [rad/s]."""
-    win  = sliding_window_view(split.test_noisy, window, axis=1)
+    win = sliding_window_view(split.test_noisy, window, axis=1)
     pred = win.mean(axis=-1)
-    err  = pred - split.test_true[:, window - 1:]
-    return float(np.sqrt(np.mean(err ** 2)))
+    err = pred - split.test_true[:, window - 1 :]
+    return float(np.sqrt(np.mean(err**2)))
 
 
 # ---------------------------------------------------------------------------
@@ -171,9 +183,7 @@ def train_model(
                 f"  Epoch {epoch:3d}  train {np.sqrt(tr):.4f}  val {np.sqrt(va):.4f}  (normalized RMSE)"
             )
 
-    model.load_state_dict(
-        torch.load(ckpt_path, weights_only=True, map_location=device)
-    )
+    model.load_state_dict(torch.load(ckpt_path, weights_only=True, map_location=device))
     return history
 
 
@@ -233,7 +243,7 @@ def plot_test_trajectory(
         win_volt = sliding_window_view(stats.norm_volt(volt), window)
         x = np.stack([win_noisy, win_volt], axis=-1).astype(np.float32)  # (T-W+1, W, 2)
     else:
-        x = win_noisy[:, :, np.newaxis].astype(np.float32)               # (T-W+1, W, 1)
+        x = win_noisy[:, :, np.newaxis].astype(np.float32)  # (T-W+1, W, 1)
 
     model.eval()
     with torch.no_grad():
@@ -284,39 +294,46 @@ def main():
     parser = argparse.ArgumentParser(description="BDC motor speed filter training")
     # Model
     parser.add_argument("--model", default="gru", choices=["gru", "cnn", "tcn"])
-    parser.add_argument("--no-voltage", action="store_true",
-                        help="Ablation: use only noisy speed as input (no voltage)")
+    parser.add_argument(
+        "--no-voltage",
+        action="store_true",
+        help="Ablation: use only noisy speed as input (no voltage)",
+    )
     # GRU
-    parser.add_argument("--hidden",  type=int, default=32)
-    parser.add_argument("--layers",  type=int, default=1)
+    parser.add_argument("--hidden", type=int, default=32)
+    parser.add_argument("--layers", type=int, default=1)
     # CNN
     parser.add_argument("--channels", type=int, default=32)
-    parser.add_argument("--kernel",   type=int, default=8)
-    parser.add_argument("--depth",    type=int, default=2)
+    parser.add_argument("--kernel", type=int, default=8)
+    parser.add_argument("--depth", type=int, default=2)
     # TCN
     parser.add_argument("--tcn-channels", type=int, default=32)
-    parser.add_argument("--tcn-kernel",   type=int, default=4)
-    parser.add_argument("--tcn-levels",   type=int, default=4,
-                        help="Number of dilation levels (RF = 1 + 2*(k-1)*(2^n - 1))")
+    parser.add_argument("--tcn-kernel", type=int, default=4)
+    parser.add_argument(
+        "--tcn-levels",
+        type=int,
+        default=4,
+        help="Number of dilation levels (RF = 1 + 2*(k-1)*(2^n - 1))",
+    )
     # Training
-    parser.add_argument("--window",   type=int,   default=64)
-    parser.add_argument("--epochs",   type=int,   default=50)
-    parser.add_argument("--lr",       type=float, default=1e-3)
-    parser.add_argument("--batch",    type=int,   default=512)
-    parser.add_argument("--patience", type=int,   default=10)
-    parser.add_argument("--workers",  type=int,   default=2)
-    parser.add_argument("--split",    default="data/motor_split.npz")
+    parser.add_argument("--window", type=int, default=64)
+    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--batch", type=int, default=512)
+    parser.add_argument("--patience", type=int, default=10)
+    parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument("--split", default="data/motor_split.npz")
     args = parser.parse_args()
 
-    figures  = Path("figures")
+    figures = Path("figures")
     ckpt_dir = Path("checkpoints")
     figures.mkdir(exist_ok=True)
     ckpt_dir.mkdir(exist_ok=True)
 
-    suffix    = f"{args.model}" + ("_novolt" if args.no_voltage else "")
+    suffix = f"{args.model}" + ("_novolt" if args.no_voltage else "")
     ckpt_path = ckpt_dir / f"best_{suffix}.pt"
 
-    device  = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     pin_mem = device == "cuda"
     print(f"Device : {device}")
 
@@ -324,8 +341,10 @@ def main():
     # Load data
     # ------------------------------------------------------------------
     split = MotorSplit.load(args.split)
-    print(f"Split  : train {split.train_noisy.shape}  "
-          f"val {split.val_noisy.shape}  test {split.test_noisy.shape}")
+    print(
+        f"Split  : train {split.train_noisy.shape}  "
+        f"val {split.val_noisy.shape}  test {split.test_noisy.shape}"
+    )
 
     stats = NormStats.from_split(split)
 
@@ -335,7 +354,9 @@ def main():
     print("\nComputing baselines (EMA + Kalman may take a few seconds) …")
     baselines = run_all_baselines(split, _BASE_PARAMS, ma_window=args.window)
     for name, rmse in baselines.items():
-        print(f"  {name:<28s}: {rmse:6.2f} rad/s  |  {rmse*60/(2*np.pi):7.1f} RPM")
+        print(
+            f"  {name:<28s}: {rmse:6.2f} rad/s  |  {rmse * 60 / (2 * np.pi):7.1f} RPM"
+        )
 
     ma_rmse = next(v for k, v in baselines.items() if k.startswith("MA"))
 
@@ -346,27 +367,32 @@ def main():
 
     def mk_ds(noisy, true, volt):
         return BDCFilterDataset(
-            stats.norm_noisy(noisy), stats.norm_true(true), stats.norm_volt(volt),
-            W, use_voltage=not args.no_voltage,
+            stats.norm_noisy(noisy),
+            stats.norm_true(true),
+            stats.norm_volt(volt),
+            W,
+            use_voltage=not args.no_voltage,
         )
 
     tr_ds = mk_ds(split.train_noisy, split.train_true, split.train_voltage)
-    va_ds = mk_ds(split.val_noisy,   split.val_true,   split.val_voltage)
-    te_ds = mk_ds(split.test_noisy,  split.test_true,  split.test_voltage)
+    va_ds = mk_ds(split.val_noisy, split.val_true, split.val_voltage)
+    te_ds = mk_ds(split.test_noisy, split.test_true, split.test_voltage)
 
-    loader_kw = dict(batch_size=args.batch, num_workers=args.workers, pin_memory=pin_mem)
-    tr_loader = DataLoader(tr_ds, shuffle=True,  **loader_kw)
+    loader_kw = dict(
+        batch_size=args.batch, num_workers=args.workers, pin_memory=pin_mem
+    )
+    tr_loader = DataLoader(tr_ds, shuffle=True, **loader_kw)
     va_loader = DataLoader(va_ds, shuffle=False, **loader_kw)
-    feat_str  = "omega_noisy only" if args.no_voltage else "omega_noisy + voltage"
+    feat_str = "omega_noisy only" if args.no_voltage else "omega_noisy + voltage"
     print(f"\nSamples: train {len(tr_ds):,}  val {len(va_ds):,}  test {len(te_ds):,}")
     print(f"Input  : {feat_str}")
 
     # ------------------------------------------------------------------
     # Model
     # ------------------------------------------------------------------
-    model    = build_model(args).to(device)
+    model = build_model(args).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    label    = suffix.upper()
+    label = suffix.upper()
     print(f"\nModel  : {label}  params={n_params:,}")
     if args.model == "tcn":
         rf = model.receptive_field
@@ -377,7 +403,14 @@ def main():
     # ------------------------------------------------------------------
     print("\nTraining …")
     history = train_model(
-        model, tr_loader, va_loader, args.epochs, args.lr, args.patience, device, ckpt_path
+        model,
+        tr_loader,
+        va_loader,
+        args.epochs,
+        args.lr,
+        args.patience,
+        device,
+        ckpt_path,
     )
 
     # ------------------------------------------------------------------
@@ -393,18 +426,29 @@ def main():
     print("-" * 56)
     for name, rmse in baselines.items():
         impr = 100 * (1 - rmse / ma_rmse)
-        print(f"  {name:<28s}  {rmse:6.2f}  {rmse*60/(2*np.pi):7.1f}  {impr:+6.1f}%")
+        print(
+            f"  {name:<28s}  {rmse:6.2f}  {rmse * 60 / (2 * np.pi):7.1f}  {impr:+6.1f}%"
+        )
     impr_model = 100 * (1 - test_rmse / ma_rmse)
-    print(f"  {label:<28s}  {test_rmse:6.2f}  {test_rmse_rpm:7.1f}  {impr_model:+6.1f}%")
+    print(
+        f"  {label:<28s}  {test_rmse:6.2f}  {test_rmse_rpm:7.1f}  {impr_model:+6.1f}%"
+    )
     print("=" * 56)
 
     # ------------------------------------------------------------------
     # Plots
     # ------------------------------------------------------------------
     plot_training_curves(history, label, save_dir=figures)
-    plot_test_trajectory(model, split, stats, W, label,
-                         device=device, save_dir=figures,
-                         use_voltage=not args.no_voltage)
+    plot_test_trajectory(
+        model,
+        split,
+        stats,
+        W,
+        label,
+        device=device,
+        save_dir=figures,
+        use_voltage=not args.no_voltage,
+    )
 
 
 if __name__ == "__main__":

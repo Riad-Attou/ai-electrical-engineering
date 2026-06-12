@@ -21,10 +21,10 @@ class CNNFilter(nn.Module):
 
     def __init__(
         self,
-        input_size:  int = 2,
-        channels:    int = 32,
+        input_size: int = 2,
+        channels: int = 32,
         kernel_size: int = 8,
-        depth:       int = 2,
+        depth: int = 2,
     ):
         super().__init__()
         layers: list[nn.Module] = []
@@ -42,5 +42,5 @@ class CNNFilter(nn.Module):
         assert x.shape[-1] >= self._min_window, (
             f"Window {x.shape[-1]} < minimum {self._min_window} for this CNNFilter config"
         )
-        out = self.conv(x)              # (B, channels, W')
-        return self.head(out[:, :, -1]).squeeze(-1)   # last step → (B,)
+        out = self.conv(x)  # (B, channels, W')
+        return self.head(out[:, :, -1]).squeeze(-1)  # last step → (B,)

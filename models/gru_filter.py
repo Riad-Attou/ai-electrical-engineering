@@ -17,10 +17,10 @@ class GRUFilter(nn.Module):
 
     def __init__(
         self,
-        input_size:  int   = 2,
-        hidden_size: int   = 32,
-        num_layers:  int   = 1,
-        dropout:     float = 0.0,
+        input_size: int = 2,
+        hidden_size: int = 32,
+        num_layers: int = 1,
+        dropout: float = 0.0,
     ):
         super().__init__()
         self.gru = nn.GRU(
@@ -33,5 +33,5 @@ class GRUFilter(nn.Module):
         self.head = nn.Linear(hidden_size, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out, _ = self.gru(x)                          # (B, W, hidden_size)
-        return self.head(out[:, -1, :]).squeeze(-1)   # (B,)
+        out, _ = self.gru(x)  # (B, W, hidden_size)
+        return self.head(out[:, -1, :]).squeeze(-1)  # (B,)

@@ -3,7 +3,9 @@ PyTorch dataset and normalization for BDC motor speed filter training.
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -15,12 +17,13 @@ class NormStats:
     Z-score statistics computed from the training split only.
     Apply to all splits before building datasets to avoid leakage.
     """
+
     noisy_mean: float
-    noisy_std:  float
-    volt_mean:  float
-    volt_std:   float
-    true_mean:  float
-    true_std:   float
+    noisy_std: float
+    volt_mean: float
+    volt_std: float
+    true_mean: float
+    true_std: float
 
     @staticmethod
     def from_split(split) -> "NormStats":
@@ -72,19 +75,19 @@ class BDCFilterDataset(Dataset):
     def __init__(
         self,
         omega_noisy: np.ndarray,
-        omega_true:  np.ndarray,
-        voltage:     np.ndarray,
-        window:      int,
+        omega_true: np.ndarray,
+        voltage: np.ndarray,
+        window: int,
         use_voltage: bool = True,
     ):
         super().__init__()
         N, T = omega_noisy.shape
         assert window <= T, f"window ({window}) > trajectory length ({T})"
 
-        self._noisy       = omega_noisy.astype(np.float32)
-        self._true        = omega_true.astype(np.float32)
-        self._voltage     = voltage.astype(np.float32)
-        self._W           = window
+        self._noisy = omega_noisy.astype(np.float32)
+        self._true = omega_true.astype(np.float32)
+        self._voltage = voltage.astype(np.float32)
+        self._W = window
         self._use_voltage = use_voltage
 
         # Flat index as numpy arrays for memory efficiency
@@ -104,6 +107,6 @@ class BDCFilterDataset(Dataset):
         if self._use_voltage:
             x = np.stack([noisy_win, self._voltage[n, t - W : t]], axis=-1)  # (W, 2)
         else:
-            x = noisy_win[:, np.newaxis]   # (W, 1)
+            x = noisy_win[:, np.newaxis]  # (W, 1)
         y = self._true[n, t - 1]
         return torch.from_numpy(x), torch.tensor(y)
