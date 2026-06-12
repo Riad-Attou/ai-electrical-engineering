@@ -69,6 +69,33 @@ def _discretize_motor(params: BDCMotorParams, dt: float):
     return A_d, B_d
 
 
+def kalman_predict_one(
+    noisy: np.ndarray,
+    volt: np.ndarray,
+    params: BDCMotorParams,
+    dt: float,
+    Q_diag: tuple[float, float] = (10.0, 1.0),
+    R_var: float = 300.0,
+) -> np.ndarray:
+    """Steady-state Kalman predictions for a single trajectory. Returns (T,)."""
+    A_d, B_d = _discretize_motor(params, dt)
+    C = np.array([[0.0, 1.0]])
+    Q = np.diag(Q_diag)
+    R_m = np.array([[R_var]])
+    P_ss = solve_discrete_are(A_d.T, C.T, Q, R_m)
+    K_ss = (P_ss @ C.T @ np.linalg.inv(C @ P_ss @ C.T + R_m)).flatten()
+
+    T = len(noisy)
+    x = np.zeros(2)
+    preds = np.empty(T, dtype=np.float32)
+    for t in range(T):
+        x_pred = A_d @ x + B_d * volt[t]
+        innov = noisy[t] - x_pred[1]
+        x = x_pred + K_ss * innov
+        preds[t] = x[1]
+    return preds
+
+
 def kalman_rmse(
     split: MotorSplit,
     params: BDCMotorParams,
