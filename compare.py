@@ -152,7 +152,6 @@ def main():
         if key in model_preds:
             _plot(ax, model_preds[key], key, t_offset=WINDOW - 1)
     ax.set_ylabel("Speed (RPM)", fontsize=12)
-    ax.legend(ncol=4, fontsize=9, loc="upper left")
     ax.grid(True, alpha=0.4)
     ax.set_title(
         f"Test trajectory {n} — speed filter comparison  "
@@ -162,28 +161,31 @@ def main():
 
     # Error panel
     ax = axes[1]
-    true_full = true  # full trajectory
+    true_full = true
     for key, pred in [("EMA", ema_pred), ("Kalman", kalman_pred)]:
         label, color, ls, lw, alpha = _STYLE[key]
         err = pred[:T_plot] - true_full[:T_plot]
-        ax.plot(t_ax[:T_plot], _rpm(err), color=color, ls=ls, lw=lw,
-                alpha=alpha, label=label)
+        ax.plot(t_ax[:T_plot], _rpm(err), color=color, ls=ls, lw=lw, alpha=alpha)
     for key in ("GRU_NOVOLT", "CNN", "TCN", "GRU"):
         if key in model_preds:
             label, color, ls, lw, alpha = _STYLE[key]
             t0 = WINDOW - 1
             err = model_preds[key][:T_plot - t0] - true_full[t0:T_plot]
-            ax.plot(t_ax[t0:T_plot], _rpm(err), color=color, ls=ls, lw=lw,
-                    alpha=alpha, label=label)
+            ax.plot(t_ax[t0:T_plot], _rpm(err), color=color, ls=ls, lw=lw, alpha=alpha)
     ax.axhline(0, color="k", lw=0.8, ls="--")
     ax.set_ylabel("Error (RPM)", fontsize=12)
     ax.set_xlabel("Time (s)", fontsize=12)
-    ax.legend(ncol=4, fontsize=9, loc="upper left")
     ax.grid(True, alpha=0.4)
 
+    # Single legend below both panels
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=4, fontsize=10,
+               bbox_to_anchor=(0.5, 0.0), framealpha=0.95)
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.14)
+
     out = Path(args.out)
-    plt.savefig(out, dpi=180)
+    plt.savefig(out, dpi=180, bbox_inches="tight")
     print(f"\nSaved → {out}")
     plt.show()
 
