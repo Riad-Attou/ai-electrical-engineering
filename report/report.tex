@@ -1,0 +1,268 @@
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{geometry}
+\usepackage{microtype}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage{titlesec}
+
+\geometry{top=2cm, bottom=2cm, left=1.5cm, right=1.5cm, columnsep=0.6cm}
+
+\definecolor{bestrow}{RGB}{198,239,206}   % green highlight
+\definecolor{seccolor}{RGB}{30,80,160}
+
+\titleformat{\section}{\normalfont\bfseries\color{seccolor}}{{\thesection.}}{0.5em}{}
+\titleformat{\subsection}{\normalfont\itshape}{}{0em}{}
+
+\captionsetup{font=small, labelfont=bf}
+
+% -----------------------------------------------------------------------
+\title{\textbf{Speed Control of a BDC Motor with Vertical Rod:\\
+From First-Principles Dynamics to Data-Driven Feedforward}}
+\author{Paweekorn Buasakorn}
+\date{}
+% -----------------------------------------------------------------------
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+% ===================================================================
+\section{Motor Dynamics}
+% ===================================================================
+
+A brushed DC (BDC) motor driving a vertical rigid rod is modelled
+through two coupled subsystems.
+
+\subsection{Electrical subsystem}
+Applying Kirchhoff's voltage law to the armature circuit:
+\begin{equation}
+  L\,\frac{di}{dt} = V_{\mathrm{in}} - Ri - K_b\,\omega
+  \label{eq:elec}
+\end{equation}
+where $V_{\mathrm{in}}$ is the applied voltage, $i$ the armature
+current, $\omega$ the shaft angular speed, $R$ the armature
+resistance, $L$ the inductance, and $K_b$ the back-EMF constant.
+
+\subsection{Mechanical subsystem}
+The net torque balance on the motor shaft with an attached rod of
+mass $m$, length $\ell$, centre of mass at $\ell_{cm}=\ell/2$, and
+moment of inertia $I_{\mathrm{rod}}=\tfrac{1}{3}m\ell^{2}$ gives:
+\begin{equation}
+  J_{\mathrm{eff}}\,\frac{d\omega}{dt}
+    = K_t\,i - B\,\omega - mg\ell_{cm}\sin\theta
+  \label{eq:mech}
+\end{equation}
+where $J_{\mathrm{eff}}=J_m + I_{\mathrm{rod}}$, $K_t$ the torque
+constant, $B$ the viscous friction coefficient, $\theta$ the rod angle
+from the downward vertical, and $g$ gravitational acceleration.
+The system is integrated numerically using a fixed-step RK4 integrator
+with $\Delta t = 10^{-3}$\,s.
+
+The parameters used throughout are listed in Table~\ref{tab:params}.
+
+\begin{table}[h]
+\centering
+\caption{Simulation parameters}
+\label{tab:params}
+\begin{tabular}{llll}
+\toprule
+\textbf{Symbol} & \textbf{Value} & \textbf{Symbol} & \textbf{Value}\\
+\midrule
+$R$   & 3.0\,$\Omega$       & $J_m$  & $7.4\times10^{-5}$\,kg\,m$^2$\\
+$L$   & 4\,mH               & $B$    & $5\times10^{-3}$\,N\,m\,s/rad\\
+$K_t$ & 0.05\,N\,m/A        & $m$    & 0.05\,kg\\
+$K_b$ & 0.05\,V\,s/rad      & $\ell$ & 0.1\,m\\
+$V_{\max}$ & 12\,V          & $g$    & 9.81\,m/s$^2$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ===================================================================
+\section{Gravity Compensation at Steady State}
+% ===================================================================
+
+To derive a feedforward term for gravity, consider the steady-state
+condition where all derivatives vanish
+($\frac{di}{dt}=0$,\; $\frac{d\omega}{dt}=0$):
+\begin{align}
+  V &= Ri_{ss} + K_b\,\omega \label{eq:ss_elec}\\
+  0 &= K_t\,i_{ss} - B\,\omega - mg\ell_{cm}\sin\theta \label{eq:ss_mech}
+\end{align}
+Solving \eqref{eq:ss_mech} for $i_{ss}$ and substituting into
+\eqref{eq:ss_elec}:
+\begin{equation}
+  V_{ss} = \underbrace{\frac{R\,mg\ell_{cm}\sin\theta}{K_t}}_{V_{\mathrm{grav}}}
+           + \underbrace{\left(\frac{RB}{K_t}+K_b\right)\omega}_{V_{\omega}}
+  \label{eq:vss}
+\end{equation}
+The gravity feedforward term $V_{\mathrm{grav}}$ is extracted and added
+directly to the PI control output:
+\begin{equation}
+  V_{\mathrm{cmd}} = V_{\mathrm{grav}} + K_p\,e + K_i\!\int\! e\,dt
+  \label{eq:pi_grav}
+\end{equation}
+
+% ===================================================================
+\section{Inverse Model via Laplace Transform}
+% ===================================================================
+
+Taking the Laplace transform of \eqref{eq:elec} and \eqref{eq:mech}
+and eliminating $I(s)$:
+\begin{equation}
+  V_{\mathrm{in}}(s)
+    = \underbrace{\frac{(J_{\mathrm{eff}}s+B)(Ls+R)+K_tK_b}{K_t}}_{G_1(s)}\,\Omega(s)
+    + \underbrace{\frac{Ls+R}{K_t}}_{G_2(s)}\,T_{\mathrm{load}}(s)
+  \label{eq:laplace_inv}
+\end{equation}
+where $T_{\mathrm{load}}(s) = mg\ell_{cm}\sin\theta$ is treated as a
+disturbance. The term $G_1(s)$ gives the voltage required to produce a
+desired speed trajectory $\Omega_{\mathrm{ref}}(s)$, while $G_2(s)$
+accounts for load rejection.
+
+% ===================================================================
+\section{Realizability and the Low-Pass Correction}
+% ===================================================================
+
+Expanding $G_1(s)$:
+\begin{equation}
+  G_1(s) = \frac{J_{\mathrm{eff}}L}{K_t}\,s^2
+          + \frac{J_{\mathrm{eff}}R + BL}{K_t}\,s
+          + \frac{BR + K_tK_b}{K_t}
+  \label{eq:g1}
+\end{equation}
+This is a \emph{polynomial} in $s$ (improper transfer function): its
+numerator degree (2) exceeds its denominator degree (0).
+Physically, applying $G_1(s)$ requires twice-differentiating the
+reference $\omega_{\mathrm{ref}}$, which amplifies noise and is
+non-causal in practice.
+
+To make the feedforward realizable, a second-order low-pass filter
+$(\tau s+1)^{-2}$ is appended:
+\begin{equation}
+  G_{ff}(s) = \frac{G_1(s)}{(\tau s+1)^2}
+  \label{eq:gff}
+\end{equation}
+The filter introduces two poles and shifts relative degree to zero,
+making $G_{ff}(s)$ proper. However, choosing $\tau$ requires careful
+tuning and the resulting filter still demands precise knowledge of all
+motor parameters ($R,L,K_t,K_b,J,B$), making it fragile and
+impractical outside of MATLAB/Simulink environments.
+
+% ===================================================================
+\section{Polynomial Regression as a Practical Alternative}
+% ===================================================================
+
+\subsection{Motivation}
+Rather than implementing the model-based inverse filter, we adopt a
+\emph{data-driven} approach: measure the steady-state relationship
+between voltage and speed experimentally, invert it, and fit a
+polynomial.
+
+\subsection{Data collection}
+The motor is driven at each voltage level
+$V \in \{-12, -9, \ldots, 9, 12\}$\,V.
+The simulation waits for steady state (rolling 1\,s window with
+$\sigma_\omega < 0.5$\,rad/s and drift $<0.3$\,rad/s), then records
+$N=100$ noisy speed samples per level, yielding a dataset
+$\{(V_k,\,\omega_k)\}$.
+
+\subsection{Inversion and zero-bias fit}
+Because the motor is symmetric and exhibits no offset at $\omega=0$,
+the inverse map $V = f(\omega)$ is constrained to pass through the
+origin. A zero-intercept polynomial of degree $n$ is fitted by solving:
+\begin{equation}
+  \min_{\mathbf{c}}\,\bigl\|X\mathbf{c} - \bar{V}\bigr\|^2,\quad
+  X_{ij} = \bar{\omega}_i^{\,j},\;\; j=1,\ldots,n
+  \label{eq:lstsq}
+\end{equation}
+using \texttt{numpy.linalg.lstsq}, where $\bar{\omega}_i$ and
+$\bar{V}_i$ are the per-level means. With $n=2$ the result is:
+\begin{equation}
+  \hat{V}(\omega) = c_1\,\omega + c_2\,\omega^2
+  \label{eq:poly}
+\end{equation}
+The fitted coefficients are $c_1 \approx 0.3588$\,V\,s/rad and
+$c_2 \approx 0$, consistent with the theoretical steady-state gain
+$\tfrac{RB}{K_t}+K_b = 0.35$\,V\,s/rad. At runtime the feedforward
+voltage is simply:
+\begin{equation}
+  V_{ff}^{\mathrm{poly}}(\omega_{\mathrm{ref}})
+    = \hat{V}\!\left(\operatorname{clip}(\omega_{\mathrm{ref}},\,
+      \omega_{\min},\,\omega_{\max})\right)
+  \label{eq:poly_ff}
+\end{equation}
+This requires \emph{no parameter knowledge}, is trivially fast to
+evaluate, and generalises to any actuator with a monotone
+steady-state characteristic.
+
+% ===================================================================
+\section{Experimental Comparison}
+% ===================================================================
+
+Eight closed-loop experiments compare controllers on two reference
+profiles: a constant step ($\omega_{\mathrm{ref}}=10$\,rad/s) and a
+quintic trajectory that smoothly ramps from 0 to 10\,rad/s between
+$t=0.5$\,s and $t=3.5$\,s with zero boundary velocity and
+acceleration. All controllers share $K_p=5$, $K_i=2$.
+
+Table~\ref{tab:results} reports the RMS tracking error over 5\,s.
+The best result is highlighted in green.
+
+\begin{table}[h]
+\centering
+\caption{RMS tracking error (rad/s) for each controller and reference.}
+\label{tab:results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Controller} & \textbf{Const.\ ref} & \textbf{Trajectory}\\
+\midrule
+PI only                        & 0.495 & 0.322 \\
+PI + gravity FFW               & 0.450 & 0.279 \\
+PI + poly FFW                  & 0.376 & 0.171 \\
+\rowcolor{bestrow}
+PI + poly FFW + gravity FFW    & 0.322 & \textbf{0.033} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Discussion}
+Pure PI achieves basic regulation but carries a steady-state offset
+under gravity load. Adding the analytical gravity feedforward
+(Section~2) reduces the error marginally on constant
+references but still leaves the integral to compensate model mismatch.
+
+The polynomial feedforward provides a larger benefit: by pre-computing
+the steady-state voltage for any $\omega_{\mathrm{ref}}$, it removes
+the dominant tracking lag and allows the PI to act only on residual
+disturbances.
+
+Combining both feedforwards yields the best performance. On the quintic
+trajectory the RMSE drops to \textbf{0.033\,rad/s} --- an order of
+magnitude below pure PI --- because the polynomial term handles the
+voltage demand and the gravity term compensates the angle-dependent
+disturbance, leaving the integrator nearly idle. The constant-reference
+experiments show smaller absolute differences because the integrator
+eventually winds up to eliminate any steady bias, narrowing the gap
+between strategies.
+
+% ===================================================================
+\section{Conclusion}
+% ===================================================================
+
+A complete simulation pipeline was developed for a BDC motor driving a
+vertical rod.  The model-based inverse feedforward, while theoretically
+exact, is non-realizable without parameter knowledge and additional
+filtering.  Polynomial regression on steady-state input--output data
+provides a practical, model-free substitute that, combined with an
+analytical gravity term, reduces trajectory-tracking error by
+${\sim}10\times$ compared to PI alone. The pipeline --- data
+collection, curve fitting, controller design, and benchmarking --- is
+fully automated and reproducible from the project root.
+
+\end{document}
