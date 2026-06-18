@@ -12,14 +12,14 @@ from utils.motor import (
 )
 
 PARAMS = BDCMotorParams(
-R=3.0, L=4e-3, Kt=0.05, Kb=0.05, J=7.4e-5, B=0.005, V_max=5.0)
+R=3.0, L=4e-3, Kt=0.05, Kb=0.05, J=7.04e-5, B=0.005, V_max=5.0)
 ROD = PendulumParams(m=0.05, l=0.1, g=9.81)
-NOISE = SpeedSensorNoise(std=15.0, quantization=3,
+NOISE = SpeedSensorNoise(std=0.0, quantization=0,
                          rng=np.random.default_rng(42))
 
 dataset = generate_pendulum_dataset(
     params=PARAMS, pendulum=ROD, noise=NOISE,
-    dt=0.001, t_end=5.0, profile="step", seed=7,
+    dt=0.001, t_end=7.0, profile="step", seed=7,
 )
 dataset.save("dataset/pendulum_dataset.npz")
 

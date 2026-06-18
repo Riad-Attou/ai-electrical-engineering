@@ -17,7 +17,7 @@ from utils.controller import PIGravityController
 # System parameters
 # ---------------------------------------------------------------------------
 PARAMS = BDCMotorParams(R=3.0, L=4e-3, Kt=0.05, Kb=0.05,
-                        J=7.4e-5, B=0.005, V_max=12.0)
+                        J=7.04e-5, B=0.005, V_max=12.0)
 ROD    = PendulumParams(m=0.05, l=0.1, g=9.81)
 NOISE  = SpeedSensorNoise(std=0.0, quantization=0.0)
 
@@ -76,7 +76,7 @@ while running:
                                 omega_target=omega_target,
                                 theta=motor.state.theta,
                                 dt=DT)
-        state       = motor.step(dt=DT, voltage=voltage)
+        state       = motor.step(dt=DT, voltage=5) # voltage)
         omega_noisy = NOISE.measure(state.omega)
 
 vis.close()
