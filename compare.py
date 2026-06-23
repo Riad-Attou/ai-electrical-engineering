@@ -141,45 +141,60 @@ def main() -> None:
         print(f"  {_STYLE[key][0]:<30s}  {r*1e3:7.3f}  {np.degrees(r):8.4f}  {impr:+6.1f}%")
 
     # ------------------------------------------------------------------
-    # Plot
+    # Plot — top panel: backlash residual (mrad); bottom: residual error (mrad)
+    # All methods predict theta_l; showing (pred - rigid) makes differences visible.
+    # Rigid baseline is the reference line at 0.
     # ------------------------------------------------------------------
     fig, axes = plt.subplots(2, 1, figsize=(14, 7), sharex=True,
                              gridspec_kw={"height_ratios": [3, 2]})
 
-    def _p(ax, t_slice, y_slice, key):
-        label, color, ls, lw, alpha = _STYLE[key]
-        ax.plot(t[t_slice], np.degrees(y_slice), color=color, ls=ls,
-                lw=lw, alpha=alpha, label=label)
-
     sl_plot = slice(max(i0, t0), i1)
+    t_sl    = t[sl_plot]
 
-    # Speed panel
+    # Backlash residual = pred - rigid = what each method adds on top of enc_m/N
+    true_residual = theta_l - rigid  # ground-truth backlash error
+
+    def _mrad(v): return v * 1e3
+
     ax = axes[0]
-    ax.plot(t[i0:i1], np.degrees(theta_l[i0:i1]),
-            color=_STYLE["True"][1], ls="--", lw=_STYLE["True"][3],
-            alpha=_STYLE["True"][4], label=_STYLE["True"][0])
-    _p(ax, sl_plot, rigid[sl_plot],  "Rigid")
-    _p(ax, sl_plot, enc_o[sl_plot],  "EncO")
+    # Ground truth backlash error
+    ax.plot(t[sl_plot], _mrad(true_residual[sl_plot]),
+            color=_STYLE["True"][1], ls="--", lw=1.4,
+            alpha=0.9, label="True backlash error  (θ_l − enc_m/N)")
+    # Output encoder residual
+    ax.plot(t_sl, _mrad((enc_o - rigid)[sl_plot]),
+            color=_STYLE["EncO"][1], ls="-", lw=0.9, alpha=0.6,
+            label=_STYLE["EncO"][0])
+    # Model residuals
     for key, pred in model_preds.items():
+        label, color, ls, lw, alpha = _STYLE[key]
         pred_full = np.full(T, np.nan)
         pred_full[t0:] = pred
-        _p(ax, sl_plot, pred_full[sl_plot], key)
-
-    ax.set_ylabel("Output angle (°)", fontsize=12)
+        residual = pred_full - rigid
+        ax.plot(t_sl, _mrad(residual[sl_plot]), color=color, ls=ls,
+                lw=lw, alpha=alpha, label=label)
+    ax.axhline(0, color="#888888", lw=0.8, ls=":")
+    ax.set_ylabel("Backlash residual (mrad)", fontsize=12)
     ax.grid(True, alpha=0.4)
     ax.set_title("Servo backlash compensation — all methods (test set, multisine)", fontsize=13)
 
-    # Error panel
+    # Error panel — estimation error = pred - theta_l, in mrad
     ax = axes[1]
     ref_sl = theta_l[sl_plot]
-    _p(ax, sl_plot, rigid[sl_plot] - ref_sl, "Rigid")
-    _p(ax, sl_plot, enc_o[sl_plot] - ref_sl, "EncO")
+    ax.plot(t_sl, _mrad((rigid - theta_l)[sl_plot]),
+            color=_STYLE["Rigid"][1], lw=_STYLE["Rigid"][3],
+            alpha=_STYLE["Rigid"][4], label=_STYLE["Rigid"][0])
+    ax.plot(t_sl, _mrad((enc_o - theta_l)[sl_plot]),
+            color=_STYLE["EncO"][1], lw=_STYLE["EncO"][3],
+            alpha=_STYLE["EncO"][4], label=_STYLE["EncO"][0])
     for key, pred in model_preds.items():
+        label, color, ls, lw, alpha = _STYLE[key]
         pred_full = np.full(T, np.nan)
         pred_full[t0:] = pred
-        _p(ax, sl_plot, pred_full[sl_plot] - ref_sl, key)
+        ax.plot(t_sl, _mrad((pred_full - theta_l)[sl_plot]),
+                color=color, ls=ls, lw=lw, alpha=alpha, label=label)
     ax.axhline(0, color="k", lw=0.8, ls="--")
-    ax.set_ylabel("Error (°)", fontsize=12)
+    ax.set_ylabel("Estimation error (mrad)", fontsize=12)
     ax.set_xlabel("Time (s)", fontsize=12)
     ax.grid(True, alpha=0.4)
 
