@@ -200,8 +200,14 @@ def main() -> None:
     ax.set_xlabel("Time (s)", fontsize=12)
     ax.grid(True, alpha=0.4)
 
-    # Shared legend below both panels
-    handles, labels = axes[0].get_legend_handles_labels()
+    # Shared legend below both panels — merge handles from both axes, no duplicates
+    h0, l0 = axes[0].get_legend_handles_labels()
+    h1, l1 = axes[1].get_legend_handles_labels()
+    seen = set()
+    handles, labels = [], []
+    for h, l in zip(h0 + h1, l0 + l1):
+        if l not in seen:
+            handles.append(h); labels.append(l); seen.add(l)
     fig.legend(handles, labels, loc="lower center", ncol=3, fontsize=10,
                bbox_to_anchor=(0.5, 0.0), framealpha=0.95)
     plt.tight_layout()
