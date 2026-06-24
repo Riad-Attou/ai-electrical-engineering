@@ -41,18 +41,20 @@ def _model_predict(model: torch.nn.Module, enc_m: np.ndarray, pwm: np.ndarray,
                    stats: NormStats, N: float, device: str) -> np.ndarray:
     """
     Sliding-window inference → (T - W + 1,) theta_l estimate in radians.
-    Returns enc_m/N + predicted_backlash_error.
+    Uses per-window velocity scaling: pred_error = model(x) × (local_vel / N).
     """
     enc_f    = enc_m.astype(np.float32)
     pwm_n    = stats.norm_pwm(pwm).astype(np.float32)
     wins_enc = sliding_window_view(enc_f,  WINDOW)
     wins_pwm = sliding_window_view(pwm_n,  WINDOW)
-    enc_rel  = (wins_enc - wins_enc[:, :1]) / stats.enc_rel_std
+    diff_w   = np.diff(wins_enc, axis=1, prepend=wins_enc[:, :1])
+    local_vel = diff_w.std(axis=1) + 1e-6              # (T-W+1,) motor-side vel
+    enc_rel  = (wins_enc - wins_enc[:, :1]) / local_vel[:, None]
     x = np.stack([enc_rel, wins_pwm], axis=-1).astype(np.float32)
     model.eval()
     with torch.no_grad():
         pred_err_n = model(torch.from_numpy(x).to(device)).cpu().numpy()
-    pred_err = stats.denorm_error(pred_err_n)
+    pred_err = pred_err_n * (local_vel / N)            # per-window denorm
     rigid    = enc_m[WINDOW - 1:] / N
     return rigid + pred_err
 

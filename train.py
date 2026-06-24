@@ -140,19 +140,34 @@ def train_model(model: nn.Module, tr_loader: DataLoader, va_loader: DataLoader,
 # Evaluation
 # ---------------------------------------------------------------------------
 
-def evaluate(model: nn.Module, test_ds: ServoDataset, stats: NormStats,
-             device: str, batch: int = 4096) -> tuple[float, float]:
-    """Return test RMSE on backlash error in (rad, degrees)."""
-    loader = DataLoader(test_ds, batch_size=batch)
-    preds, targets = [], []
+def evaluate(model: nn.Module, split: ServoSplit, stats: NormStats,
+             window: int, device: str) -> tuple[float, float]:
+    """
+    Return test RMSE in (rad, degrees) using per-window velocity denorm.
+
+    Sliding-window inference: for each window, local_vel = std(diff(enc_win)).
+    pred_theta_l = enc_m[W-1:]/N + model_output × (local_vel / N)
+    """
+    enc_m   = split.test_enc_m.astype(np.float32)
+    pwm_n   = stats.norm_pwm(split.test_pwm).astype(np.float32)
+    theta_l = split.test_theta_l
+
+    wins_enc = sliding_window_view(enc_m,  window)
+    wins_pwm = sliding_window_view(pwm_n,  window)
+    diff_w   = np.diff(wins_enc, axis=1, prepend=wins_enc[:, :1])
+    local_vel = diff_w.std(axis=1) + 1e-6              # (T-W+1,)
+    enc_rel   = (wins_enc - wins_enc[:, :1]) / local_vel[:, None]
+    x = np.stack([enc_rel, wins_pwm], axis=-1).astype(np.float32)
+
     model.eval()
     with torch.no_grad():
-        for x, y in loader:
-            preds.append(model(x.to(device)).cpu())
-            targets.append(y)
-    pred     = stats.denorm_error(torch.cat(preds).numpy())
-    true     = stats.denorm_error(torch.cat(targets).numpy())
-    rmse_rad = float(np.sqrt(np.mean((pred - true) ** 2)))
+        pred_norm = model(torch.from_numpy(x).to(device)).cpu().numpy()
+
+    pred_err  = pred_norm * (local_vel / split.N)
+    rigid     = enc_m[window - 1:] / split.N
+    pred      = rigid + pred_err
+    true      = theta_l[window - 1:]
+    rmse_rad  = float(np.sqrt(np.mean((pred - true) ** 2)))
     return rmse_rad, float(np.degrees(rmse_rad))
 
 
@@ -168,22 +183,23 @@ def plot_test_result(model: nn.Module, split: ServoSplit, stats: NormStats,
     enc_o   = split.test_enc_o
     theta_l = split.test_theta_l
     pwm     = split.test_pwm
-    T       = len(t)
 
-    # Sliding-window inference using window-relative enc_m
-    enc_f  = enc_m.astype(np.float32)
-    pwm_n  = stats.norm_pwm(pwm).astype(np.float32)
-    wins_enc = sliding_window_view(enc_f,  window)   # (T-W+1, W)
+    # Sliding-window inference with per-window velocity denorm
+    enc_f    = enc_m.astype(np.float32)
+    pwm_n    = stats.norm_pwm(pwm).astype(np.float32)
+    wins_enc = sliding_window_view(enc_f,  window)
     wins_pwm = sliding_window_view(pwm_n,  window)
-    enc_rel  = ((wins_enc - wins_enc[:, :1]) / stats.enc_rel_std)
+    diff_w   = np.diff(wins_enc, axis=1, prepend=wins_enc[:, :1])
+    local_vel = diff_w.std(axis=1) + 1e-6
+    enc_rel  = (wins_enc - wins_enc[:, :1]) / local_vel[:, None]
     x = np.stack([enc_rel, wins_pwm], axis=-1).astype(np.float32)
 
     model.eval()
     with torch.no_grad():
         pred_err_n = model(torch.from_numpy(x).to(device)).cpu().numpy()
-    pred_err = stats.denorm_error(pred_err_n)               # predicted backlash error
-    rigid    = enc_m[window - 1:] / split.N                 # enc_m/N baseline
-    pred     = rigid + pred_err                              # reconstructed theta_l
+    pred_err = pred_err_n * (local_vel / split.N)            # per-window denorm
+    rigid    = enc_m[window - 1:] / split.N                  # enc_m/N baseline
+    pred     = rigid + pred_err                               # reconstructed theta_l
 
     t_pred  = t[window - 1:]
     true_a  = theta_l[window - 1:]
@@ -280,14 +296,8 @@ def main() -> None:
     # Datasets and loaders
     # ------------------------------------------------------------------
     def mk_ds(enc_m, pwm, theta_l):
-        err = theta_l - enc_m / split.N          # backlash error (target)
-        return ServoDataset(
-            enc_m,
-            stats.norm_pwm(pwm),
-            stats.norm_error(err),
-            stats.enc_rel_std,
-            W,
-        )
+        err = theta_l - enc_m / split.N   # raw backlash error [rad]; per-window norm in __getitem__
+        return ServoDataset(enc_m, stats.norm_pwm(pwm), err, split.N, W)
 
     tr_ds = mk_ds(split.train_enc_m, split.train_pwm, split.train_theta_l)
     va_ds = mk_ds(split.val_enc_m,   split.val_pwm,   split.val_theta_l)
@@ -320,7 +330,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Evaluate
     # ------------------------------------------------------------------
-    test_rmse_rad, test_rmse_deg = evaluate(model, te_ds, stats, device)
+    test_rmse_rad, test_rmse_deg = evaluate(model, split, stats, W, device)
 
     # ------------------------------------------------------------------
     # Comparison table
