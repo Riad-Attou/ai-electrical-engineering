@@ -72,7 +72,9 @@ class PIGravityController:
             self._integral = np.clip(
                 self._integral, -V_max / self.Ki, V_max / self.Ki
             )
-        Vref_ff = 0.436175*omega_target - -0.002772*omega_target*omega_target
+        # Vref_ff = 0.436175*omega_target - -0.002772*omega_target*omega_target
+
+        Vref_ff =  omega_target * (p.R * p.B + p.Kb * p.Kt)/p.Kt
         V = Vref_ff  + V_ff + self.Kp * e + self.Ki * self._integral
         return float(np.clip(V, -V_max, V_max))
 

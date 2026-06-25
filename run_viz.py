@@ -76,7 +76,7 @@ while running:
                                 omega_target=omega_target,
                                 theta=motor.state.theta,
                                 dt=DT)
-        state       = motor.step(dt=DT, voltage=5) # voltage)
+        state       = motor.step(dt=DT, voltage= voltage)
         omega_noisy = NOISE.measure(state.omega)
 
 vis.close()

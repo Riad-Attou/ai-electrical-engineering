@@ -1,16 +1,18 @@
 """
-8-experiment speed-control comparison for BDC motor + vertical rod.
+10-experiment speed-control comparison for BDC motor + vertical rod.
 
 Experiments
 -----------
-  1. PI only                           — constant reference  (10 rad/s)
-  2. PI only                           — quintic trajectory  (0 -> 10 rad/s)
-  3. PI + gravity FFW                  — constant reference
-  4. PI + gravity FFW                  — quintic trajectory
-  5. PI + polynomial FFW               — constant reference
-  6. PI + polynomial FFW               — quintic trajectory
-  7. PI + polynomial FFW + gravity FFW — constant reference
-  8. PI + polynomial FFW + gravity FFW — quintic trajectory
+  1. PI only                                — constant reference  (10 rad/s)
+  2. PI only                                — quintic trajectory  (0 -> 10 rad/s)
+  3. PI + gravity FFW                       — constant reference
+  4. PI + gravity FFW                       — quintic trajectory
+  5. PI + polynomial FFW                    — constant reference
+  6. PI + polynomial FFW                    — quintic trajectory
+  7. PI + polynomial FFW + gravity FFW      — constant reference
+  8. PI + polynomial FFW + gravity FFW      — quintic trajectory
+  9. PI + full model FFW + gravity FFW      — constant reference
+ 10. PI + full model FFW + gravity FFW      — quintic trajectory
 
 Run:  python experiments.py   (from project root)
 Output: nn/results/experiments.png
@@ -130,7 +132,7 @@ class _PolyGravPI:
         p, rod, V_max = self._p, self._rod, self._p.V_max
 
         omega_c = np.clip(omega_target, self._omega_min, self._omega_max)
-        V_ff_poly = float(np.clip(np.polyval(self._coeffs, omega_c), -V_max, V_max))
+        V_ff_poly =  float(np.clip(np.polyval(self._coeffs, omega_c), -V_max, V_max))
         V_ff_grav = rod.m * rod.g * rod.l_cm * np.sin(theta) * p.R / p.Kt
 
         e = omega_target - omega_meas
@@ -140,6 +142,37 @@ class _PolyGravPI:
                 self._integral, -V_max / self.Ki, V_max / self.Ki)
 
         V = V_ff_poly + V_ff_grav + self.Kp * e + self.Ki * self._integral
+        return float(np.clip(V, -V_max, V_max))
+
+
+class _ModelGravPI:
+    """PI + full analytical motor model FFW + analytical gravity FFW."""
+
+    def __init__(self, Kp: float, Ki: float,
+                 params: BDCMotorParams, pendulum: PendulumParams):
+        self.Kp = Kp
+        self.Ki = Ki
+        self._p = params
+        self._rod = pendulum
+        self._integral = 0.0
+
+    def reset(self) -> None:
+        self._integral = 0.0
+
+    def step(self, omega_meas: float, omega_target: float,
+             theta: float, dt: float) -> float:
+        p, rod, V_max = self._p, self._rod, self._p.V_max
+
+        V_ff_model = omega_target * (p.R * p.B + p.Kb * p.Kt) / p.Kt
+        V_ff_grav  = rod.m * rod.g * rod.l_cm * np.sin(theta) * p.R / p.Kt
+
+        e = omega_target - omega_meas
+        self._integral += e * dt
+        if self.Ki != 0.0:
+            self._integral = np.clip(
+                self._integral, -V_max / self.Ki, V_max / self.Ki)
+
+        V = V_ff_model + V_ff_grav + self.Kp * e + self.Ki * self._integral
         return float(np.clip(V, -V_max, V_max))
 
 
@@ -236,15 +269,19 @@ def run_experiments():
         coeffs=poly_coeffs, omega_min=omega_min, omega_max=omega_max,
     )
 
+    ctrl_model_grav = _ModelGravPI(Kp=KP, Ki=KI, params=PARAMS, pendulum=ROD)
+
     experiments = [
-        ("PI only\nconstant ref",                   ctrl_pi,        const_ref),
-        ("PI only\ntrajectory",                     ctrl_pi,        traj_ref),
-        ("PI + grav FFW\nconstant ref",             ctrl_grav,      const_ref),
-        ("PI + grav FFW\ntrajectory",               ctrl_grav,      traj_ref),
-        ("PI + poly FFW\nconstant ref",             ctrl_poly,      const_ref),
-        ("PI + poly FFW\ntrajectory",               ctrl_poly,      traj_ref),
-        ("PI + poly FFW + grav FFW\nconstant ref",  ctrl_poly_grav, const_ref),
-        ("PI + poly FFW + grav FFW\ntrajectory",    ctrl_poly_grav, traj_ref),
+        ("PI only\nconstant ref",                       ctrl_pi,         const_ref),
+        ("PI only\ntrajectory",                         ctrl_pi,         traj_ref),
+        ("PI + grav FFW\nconstant ref",                 ctrl_grav,       const_ref),
+        ("PI + grav FFW\ntrajectory",                   ctrl_grav,       traj_ref),
+        ("PI + poly FFW\nconstant ref",                 ctrl_poly,       const_ref),
+        ("PI + poly FFW\ntrajectory",                   ctrl_poly,       traj_ref),
+        ("PI + poly FFW + grav FFW\nconstant ref",      ctrl_poly_grav,  const_ref),
+        ("PI + poly FFW + grav FFW\ntrajectory",        ctrl_poly_grav,  traj_ref),
+        ("PI + full model FFW + grav FFW\nconstant ref", ctrl_model_grav, const_ref),
+        ("PI + full model FFW + grav FFW\ntrajectory",   ctrl_model_grav, traj_ref),
     ]
 
     results = []
