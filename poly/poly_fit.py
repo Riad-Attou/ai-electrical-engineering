@@ -86,7 +86,10 @@ def fit():
     ss_res = np.sum((unique_voltages - v_pred) ** 2)
     ss_tot = np.sum((unique_voltages - unique_voltages.mean()) ** 2)
     r2     = 1 - ss_res / ss_tot
-    print(f"\n  R² = {r2:.6f}   (1.0 = perfect)")
+    mse    = np.mean((unique_voltages - v_pred) ** 2)
+    rmse   = np.sqrt(mse)
+    print(f"\n  RMSE = {rmse:.6f} V")
+    print(f"  R²   = {r2:.6f}   (1.0 = perfect)")
 
     # ---- save ----
     COEFFS_PATH.parent.mkdir(parents=True, exist_ok=True)

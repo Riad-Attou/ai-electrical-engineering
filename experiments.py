@@ -13,8 +13,8 @@ Experiments
   8. PI + polynomial FFW + gravity FFW      — quintic trajectory
   9. PI + full model FFW + gravity FFW      — constant reference
  10. PI + full model FFW + gravity FFW      — quintic trajectory
- 11. PI + NN FFW                            — constant reference
- 12. PI + NN FFW                            — quintic trajectory
+ 11. PI + NN FFW + grav FFW                 — constant reference
+ 12. PI + NN FFW + grav FFW                 — quintic trajectory
 
 Run:  python experiments.py   (from project root)
 Output: poly/results/experiments.png
@@ -303,8 +303,8 @@ def run_experiments():
         ("PI + poly FFW + grav FFW\ntrajectory",        ctrl_poly_grav,  traj_ref),
         ("PI + full model FFW + grav FFW\nconstant ref", ctrl_model_grav, const_ref),
         ("PI + full model FFW + grav FFW\ntrajectory",   ctrl_model_grav, traj_ref),
-        ("PI + NN FFW\nconstant ref",                    ctrl_nn,         const_ref),
-        ("PI + NN FFW\ntrajectory",                      ctrl_nn,         traj_ref),
+        ("PI + NN FFW + grav FFW\nconstant ref",           ctrl_nn,         const_ref),
+        ("PI + NN FFW + grav FFW\ntrajectory",            ctrl_nn,         traj_ref),
     ]
 
     results = []
@@ -322,55 +322,111 @@ def run_experiments():
 # Plot
 # ---------------------------------------------------------------------------
 
-def plot_results(results: list):
-    n = len(results)
-    fig, axes = plt.subplots(n // 2, 2, figsize=(14, n // 2 * 4), sharex=True)
-    axes = axes.flatten()
-
+def _plot_single(title: str, data: dict, out_path):
     colors = {"omega": "C0", "ref": "C3", "voltage": "C2"}
 
-    for ax, (title, data) in zip(axes, results):
-        t = data["t"]
-        ax2 = ax.twinx()
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax2 = ax.twinx()
 
-        ax2.plot(t, data["voltage"], color=colors["voltage"],
-                 lw=0.8, alpha=0.45, label="voltage (V)")
-        ax2.set_ylabel("Voltage (V)", color=colors["voltage"], fontsize=8)
-        ax2.tick_params(axis="y", labelcolor=colors["voltage"], labelsize=7)
-        ax2.set_ylim(-PARAMS.V_max * 1.2, PARAMS.V_max * 1.2)
+    t = data["t"]
+    ax2.plot(t, data["voltage"], color=colors["voltage"],
+             lw=0.8, alpha=0.45, label="voltage (V)")
+    ax2.set_ylabel("Voltage (V)", color=colors["voltage"], fontsize=9)
+    ax2.tick_params(axis="y", labelcolor=colors["voltage"])
+    ax2.set_ylim(-PARAMS.V_max * 1.2, PARAMS.V_max * 1.2)
 
-        ax.plot(t, data["ref"],   color=colors["ref"],   lw=1.2,
-                ls="--", label="ref")
-        ax.plot(t, data["omega"], color=colors["omega"], lw=1.2,
-                label="omega true")
+    ax.plot(t, data["ref"],   color=colors["ref"],   lw=1.2, ls="--", label="ref")
+    ax.plot(t, data["omega"], color=colors["omega"], lw=1.2, label="omega true")
 
-        err = data["omega"] - data["ref"]
-        rmse = np.sqrt(np.mean(err**2))
-        ax.set_title(f"{title}\nRMSE = {rmse:.3f} rad/s", fontsize=9)
-        ax.set_ylabel("Speed (rad/s)", fontsize=8)
-        ax.grid(True, lw=0.4)
-        ax.axhline(0, color="gray", lw=0.5, ls=":")
+    err  = data["omega"] - data["ref"]
+    rmse = np.sqrt(np.mean(err**2))
+    ax.set_title(f"{title.replace(chr(10), '  ')}    RMSE = {rmse:.4f} rad/s", fontsize=10)
+    ax.set_ylabel("Speed (rad/s)")
+    ax.set_xlabel("Time (s)")
+    ax.grid(True, lw=0.4)
+    ax.axhline(0, color="gray", lw=0.5, ls=":")
 
-        if ax in axes[-2:]:
-            ax.set_xlabel("Time (s)", fontsize=8)
+    lines1, labels1 = ax.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax.legend(lines1 + lines2, labels1 + labels2, loc="lower right", fontsize=8)
 
-        lines1, labels1 = ax.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax.legend(lines1 + lines2, labels1 + labels2,
-                  loc="lower right", fontsize=7)
-
-    fig.suptitle("BDC Motor + Rod  —  Speed Control Experiments", fontsize=13)
     plt.tight_layout()
-
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = OUT_DIR / "experiments.png"
     plt.savefig(out_path, dpi=150)
-    print(f"\nFigure saved: {out_path}")
     plt.show()
+    plt.close(fig)
+
+
+def plot_results(results: list):
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    for i, (title, data) in enumerate(results, start=1):
+        slug = title.replace("\n", "_").replace(" ", "_").replace("+", "p")
+        out_path = OUT_DIR / f"exp{i:02d}_{slug}.png"
+        _plot_single(title, data, out_path)
+        print(f"  Saved: {out_path}")
 
 
 # ---------------------------------------------------------------------------
 
+def _metrics(data: dict) -> dict:
+    t     = data["t"]
+    omega = data["omega"]
+    ref   = data["ref"]
+    volt  = data["voltage"]
+    err   = omega - ref
+    dt    = float(t[1] - t[0])
+
+    return {
+        "RMSE (rad/s)"      : float(np.sqrt(np.mean(err**2))),
+        "MAE (rad/s)"       : float(np.mean(np.abs(err))),
+        "Max |e| (rad/s)"   : float(np.max(np.abs(err))),
+        "Ctrl effort (V·s)" : float(np.sum(np.abs(volt)) * dt),
+    }
+
+
+def print_metrics_table(results: list):
+    import textwrap
+
+    metric_keys = list(_metrics(results[0][1]).keys())
+    title_w     = 34
+    val_w       = 13
+
+    header_titles = [textwrap.shorten(t.replace("\n", " "), width=val_w)
+                     for t, _ in results]
+
+    n   = len(results)
+    sep = "+" + "-" * (title_w + 2) + ("+" + "-" * (val_w + 2)) * n + "+"
+
+    def row(label, cells):
+        r = f"| {label:<{title_w}} |"
+        for c in cells:
+            r += f" {c:^{val_w}} |"
+        return r
+
+    print("\n" + sep)
+    print(row("Metric", header_titles))
+    print(sep)
+
+    for key in metric_keys:
+        cells = []
+        for _, data in results:
+            val = _metrics(data)[key]
+            cells.append("N/A" if np.isnan(val) else f"{val:.4f}")
+        print(row(key, cells))
+
+    print(sep)
+
+
+_COMPARE = [
+    "PI only",
+    "PI + full model FFW + grav FFW",
+    "PI + poly FFW + grav FFW",
+    "PI + NN FFW + grav FFW",
+]
+
 if __name__ == "__main__":
     results = run_experiments()
     plot_results(results)
+    filtered = [(t, d) for t, d in results
+                if any(t.startswith(k) for k in _COMPARE)]
+    print_metrics_table(filtered)

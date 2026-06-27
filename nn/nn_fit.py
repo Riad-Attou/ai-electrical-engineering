@@ -25,7 +25,7 @@ import torch.nn as nn
 DATA_PATH    = Path(__file__).parent / "data" / "nn_data.npz"
 WEIGHTS_PATH = Path(__file__).parent / "data" / "nn_weights.npz"
 
-HIDDEN       = 16
+HIDDEN       = 4
 EPOCHS       = 10000
 LR           = 1e-3
 WEIGHT_DECAY = 1e-3   # L2 regularisation — main lever against overfitting
@@ -98,7 +98,7 @@ def fit():
         v_fit_np       = model(omega_dense_t).numpy().ravel()
 
     axes[1].scatter(omega_mean, unique_voltages, color="C1", zorder=3, label="averaged data")
-    axes[1].plot(omega_dense_np, v_fit_np, color="C3", lw=2, label="NN fit  (1→64→64→1, Tanh)")
+    axes[1].plot(omega_dense_np, v_fit_np, color="C3", lw=2, label="NN fit  (1→4→4→1, ReLU)")
     axes[1].set_xlabel("Speed (rad/s)")
     axes[1].set_ylabel("Voltage (V)")
     axes[1].set_title("Step 3 & 4 — Inverse map  ω → V  (NN fit)")
@@ -119,7 +119,9 @@ def fit():
     ss_res = np.sum((unique_voltages - v_pred) ** 2)
     ss_tot = np.sum((unique_voltages - unique_voltages.mean()) ** 2)
     r2     = 1.0 - ss_res / ss_tot
-    print(f"\n  R² = {r2:.6f}   (1.0 = perfect)")
+    rmse   = np.sqrt(np.mean((unique_voltages - v_pred) ** 2))
+    print(f"\n  RMSE = {rmse:.6f} V")
+    print(f"  R²   = {r2:.6f}   (1.0 = perfect)")
 
     # ---- save weights as numpy arrays for zero-dependency inference ----
     weights = {}
