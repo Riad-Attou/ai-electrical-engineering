@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a native, editable PowerPoint for the AI in Electrical Engineering deck.
 
-Content: Servo backlash compensation with deep learning (ML2).
+Content: Neural speed filtering for the motor + rod system (ML2).
 Design: warm paper background, left rule, Georgia / Calibri / Consolas.
 
     python make_slides.py   ->   presentation.pptx
@@ -292,11 +292,11 @@ def s02_toc():
     heading(s, "Outline.", Inches(1.02), size=28)
     roadmap(s, [
         ("I",   "Physical setup & dataset",
-         "Two-inertia servo ODE, chirp training excitation, multisine test."),
+         "Brushed DC motor + vertical rod load; excitation & sensor-noise design."),
         ("II",  "ML1 — Motor identification",
-         "[Friend's section] Sparse identification of motor dynamics."),
-        ("III", "ML2 — Backlash compensation",
-         "GRU, CNN, TCN: per-window normalisation, architectures, results."),
+         "[Friend's section] Identification of motor dynamics."),
+        ("III", "ML2 — Speed filtering",
+         "Neural filter (GRU / CNN / TCN) vs EMA & Kalman; nonlinear-plant gain."),
         ("IV",  "Conclusion",
          "Key numbers, takeaways, and future directions."),
     ], Inches(2.0))
@@ -314,104 +314,91 @@ def s04b_ph_ml1b():
     placeholder("02", "ML1 — results", "[ML1 — results & validation]")
 
 
-def s05_normalization():
+def s05_task_data():
     s = slide()
-    kicker(s, "03", "ML2 — feature engineering")
-    heading(s, "Per-window velocity normalisation.", Inches(1.05), size=28)
+    kicker(s, "03", "ML2 — speed filter: task & data")
+    heading(s, "Denoise the speed of a nonlinear plant.", Inches(1.05), size=28)
     tf = box(s, MX, Inches(2.0), CW, Inches(0.72))
     p = tf.paragraphs[0]; p.line_spacing = 1.2
-    runs(p, "Backlash error ≈ damper lag ∝ motor velocity. The chirp (train) is 2.4× faster than the multisine (test). A fixed `error_std` from training causes 2.3× over-correction on test — all models score *worse than rigid coupling*.",
+    runs(p, "Recover the true motor speed from a noisy speed sensor and the known command voltage. The vertical rod adds a gravity torque *∝ sin θ*, making the mechanics *nonlinear and state-dependent* — the property a learned filter can exploit.",
          font=SANS, color=INKSOFT, size=15)
     formula(s, [
-        "local_vel  =  std( diff(enc_m_window) )          ← velocity proxy per window",
-        "enc_m_rel[t]  =  (enc_m[t] − enc_m[t₀]) / local_vel   ← input feature",
-        "y_norm  =  (θ_l − enc_m/N) / (local_vel / N)            ← target",
-        "pred_error  =  model_output × (local_vel / N)            ← denorm at inference",
-    ], MX, Inches(2.88), CW, accent="navy", h=Inches(1.6))
+        "(J + I_rod)·dω/dt  =  Kt·i − B·ω − m·g·l_cm·sin(θ)     ← gravity = nonlinearity",
+        "input   x = [ omega_noisy , voltage ]        target   y = omega_true",
+    ], MX, Inches(3.05), CW, accent="navy", h=Inches(0.98))
     bullets(s, [
-        ("Both input and target scale with the *same local speed* — the ratio is constant across train and test.", "teal"),
-        ("After the fix, normalised-target std ratio train vs test: *1.06×*  (was 2.3×).", "navy"),
-        ("Window W = 64 steps = 64 ms provides enough velocity history without excessive delay.", "terra"),
-    ], MX, Inches(4.72), CW, Inches(2.1), size=15, gap=12)
+        ("*210 trajectories*, 6 s @ 1 ms, split *70/15/15 by trajectory* — no time-step leaks between train and test.", "teal"),
+        ("Excitation cycles *step / ramp / random / mixed* bipolar voltage; motor R, J, B jittered ±12% per run.", "navy"),
+        ("Sensor noise std 2–4 rad/s on a ~21 rad/s swing → *SNR ≈ 7× (14% noise)*.", "terra"),
+        ("A *chirp* excitation is held out entirely for an out-of-distribution generalisation test.", "gold"),
+    ], MX, Inches(4.35), CW, Inches(2.6), size=15, gap=11)
 
 
-def s06_architectures():
+def s06_methods():
     s = slide()
-    kicker(s, "04", "ML2 — model architectures")
-    heading(s, "Three architectures, three context lengths.", Inches(1.05), size=28)
+    kicker(s, "04", "ML2 — methods")
+    heading(s, "Classical baselines vs learned filters.", Inches(1.05), size=28)
+    tf = box(s, MX, Inches(2.0), CW, Inches(0.66))
+    p = tf.paragraphs[0]; p.line_spacing = 1.2
+    runs(p, "Baselines tuned on validation, evaluated on test: *EMA* (α tuned) and a steady-state *Kalman* filter on the nominal linear `[i, ω]` model — whose model *omits the gravity term*. Three learned filters share the same causal *64 ms* window over [omega_noisy, voltage].",
+         font=SANS, color=INKSOFT, size=15)
     pills(s, [
         ("gru", "teal",  "GRU  (3 489 params)",
-         "Recurrent hidden state h accumulates *64 ms* of context. hidden = 32, 1 layer."),
+         "Recurrent hidden state accumulates *64 ms* of context. hidden = 32, 1 layer."),
         ("cnn", "navy",  "CNN  (8 801 params)",
-         "Stack of valid 1-D convolutions. Receptive field = *15 ms*. channels = 32, k = 8, depth = 2."),
+         "Stacked causal 1-D convolutions. channels = 32, k = 8, depth = 2."),
         ("tcn", "terra", "TCN  (33 153 params)",
          "Dilated causal convolutions. Receptive field = *91 ms*. channels = 32, k = 4, 4 levels."),
-    ], Inches(2.55), h=Inches(2.05))
-    tf = box(s, MX, Inches(5.12), CW, Inches(0.55))
-    p = tf.paragraphs[0]; p.line_spacing = 1.2
-    runs(p, "All models: input `(B, 64, 2)` — [enc_m_rel, pwm_norm] — output scalar per-window normalised error. Loss: MSE. Optimiser: Adam lr = 1e-3.",
-         font=SANS, color=INKSOFT, size=14)
+    ], Inches(2.95), h=Inches(2.05))
     formula(s, [
-        "RF_CNN  =  (k−1) × depth × 2 + 1  =  15 steps",
-        "RF_TCN  =  (k−1) × (2^levels − 1) × 2 + 1  =  91 steps",
-    ], MX, Inches(5.88), CW, accent="terra", h=Inches(0.88))
+        "all learned filters:   x = (B, 64, 2)  →  scalar omega_true",
+        "loss = MSE        optimiser = Adam (lr 1e-3)        early stop on val",
+    ], MX, Inches(5.35), CW, accent="navy", h=Inches(0.98))
 
 
 def s07_results():
     s = slide()
-    kicker(s, "05", "ML2 — results  (test set, 30 s multisine)")
-    heading(s, "TCN +48 %, GRU +29 % vs rigid coupling.", Inches(1.05), size=28)
+    kicker(s, "05", "ML2 — results  (in-distribution test set)")
+    heading(s, "Learned filters cut error ~51% below Kalman.", Inches(1.05), size=27)
     tbl(s, [
-        ("Rigid coupling  —  enc_m / N",   "RMSE  0.102 mrad   (0.0058°)    —   reference"),
-        ("Output encoder  —  enc_o",        "RMSE  0.323 mrad   (0.0185°)   −217 %"),
-        ("CNN  —  valid conv, RF = 15 ms",  "RMSE  0.117 mrad   (0.0067°)   −14.8 %"),
-        ("*GRU*  —  W = 64 ms, hidden 32",  "RMSE  0.072 mrad   (0.0041°)   *+29.4 %*"),
-        ("*TCN 🏆*  —  dilated, RF = 91 ms","RMSE  0.052 mrad   (0.0030°)   *+48.4 %*"),
+        ("Raw  —  no filter",              "RMSE  2.97 rad/s   (28.3 RPM)    —   reference"),
+        ("MA  —  window 64",               "RMSE  3.00 rad/s   (28.6 RPM)   −1 %   (just lag)"),
+        ("Kalman  —  tuned, linear model", "RMSE  1.32 rad/s   (12.6 RPM)   +56 %"),
+        ("EMA  —  tuned α",                "RMSE  1.07 rad/s   (10.2 RPM)   +64 %"),
+        ("CNN",                            "RMSE  0.80 rad/s   ( 7.6 RPM)   +73 %"),
+        ("*GRU*  /  *TCN 🏆*",             "RMSE  *0.65 rad/s*   ( 6.2 RPM)   *+78 %*"),
     ], MX, Inches(2.2), CW)
-    takeaway(s, "Why CNN fails.", "Its 15 ms receptive field cannot estimate velocity from a *noisy quantised encoder*. GRU (64 ms) and TCN (91 ms) are long enough to smooth the quantisation noise and measure velocity accurately.",
-             MX, Inches(4.95), CW, accent="terra")
-    tf = box(s, MX, Inches(6.15), CW, Inches(0.8))
-    p = tf.paragraphs[0]; p.line_spacing = 1.2
-    runs(p, "Error is *damper-induced lag* proportional to motor velocity. A longer context gives a better velocity estimate — which directly explains the receptive-field ordering.",
-         font=SANS, color=INKSOFT, size=14)
+    takeaway(s, "Model-based ≠ better.",
+             "The tuned linear *Kalman (1.32)* actually loses to a plain tuned *EMA (1.07)*: its linear model can't represent the rod's gravity torque, so its model-mismatch outweighs its model-based advantage.",
+             MX, Inches(5.35), CW, accent="terra", h=Inches(1.1))
 
 
-def s08_fig_comparison():
+def s08_comparison():
     s = slide()
-    kicker(s, "06", "ML2 — comparison figure  (zoom 2–5 s)")
-    heading(s, "TCN tracks the true backlash error closely.", Inches(1.05), size=27)
+    kicker(s, "06", "ML2 — comparison")
+    heading(s, "Every neural filter beats every classical one.", Inches(1.05), size=26)
     bullets(s, [
-        ("True backlash error (dashed) stays within *±0.6 mrad* — damper lag, not dead-zone hysteresis.", "navy"),
-        ("TCN *follows the oscillation*; GRU close behind; CNN adds noise instead of removing it.", "teal"),
-        ("Rigid coupling error oscillates in phase with motor velocity — confirming the *v-proportional* mechanism.", "terra"),
-    ], MX, Inches(2.2), Inches(4.5), Inches(2.5), size=15, gap=13)
-    figure(s, "comparison_backlash_zoom.png",
-           "Fig. 1 — backlash residual and estimation error, zoom 2–5 s (test set, multisine).",
-           Inches(5.7), Inches(1.35), Inches(6.7))
+        ("A 64-sample *moving average barely helps* — the rod swings fast enough that its lag cancels its smoothing.", "navy"),
+        ("*EMA and Kalman* land at 1.1–1.3 rad/s — a useful but limited linear fit.", "terra"),
+        ("*GRU / TCN reach 0.65 rad/s* — a 78% cut from the raw sensor and ~51% below the tuned Kalman.", "teal"),
+    ], MX, Inches(2.15), Inches(4.5), Inches(2.6), size=15, gap=14)
+    figure(s, "comparison_rmse.png",
+           "Fig. 1 — test-set RMSE by method (motor + rod, lower is better).",
+           Inches(5.7), Inches(1.7), Inches(6.7))
 
 
-def s09_analysis():
+def s09_generalization():
     s = slide()
-    kicker(s, "07", "ML2 — analysis")
-    heading(s, "The gear spring never fires.", Inches(1.05), size=30)
-    tf = box(s, MX, Inches(2.0), Inches(6.2), Inches(0.88))
-    p = tf.paragraphs[0]; p.line_spacing = 1.2
-    runs(p, "In the simulation, `T_mesh = kg·dz + cg·(ω_m − N·ω_l)`. The spring `kg·dz` fires only when |φ| > gap_motor = 1 rad. But φ = θ_m − N·θ_l stays within *±0.03 rad* throughout all runs.",
-         font=SANS, color=INKSOFT, size=15)
-    rl = Inches(7.6)
-    formula(s, [
-        "φ  =  θ_m − N·θ_l  ≤  0.03 rad   «   gap_motor = 1.0 rad",
-        "→  dz = 0   →   T_mesh = cg·(ω_m − N·ω_l)   always",
-        "τ_l = Jl / (N²·η·cg)  =  5e-3 / 42.5  ≈  0.12 ms",
-    ], rl, Inches(2.0), Inches(4.7), accent="terra")
+    kicker(s, "07", "ML2 — generalisation  (unseen excitation)")
+    heading(s, "Classical filters break on unseen inputs.", Inches(1.05), size=26)
     bullets(s, [
-        ("The task is *predicting damper lag* — proportional to velocity — not dead-zone hysteresis.", "terra"),
-        ("*Longer context* improves the velocity estimate from noisy quantised encoder data.", "navy"),
-        ("TCN (91 ms) > GRU (64 ms) > CNN (15 ms) — result follows directly from context length.", "teal"),
-    ], MX, Inches(3.4), Inches(6.0), Inches(2.7), size=15, gap=12)
-    takeaway(s, "Next step.",
-             "Reduce the output gap to 0.001 rad so the spring activates — that would stress-test *hysteresis learning* and likely widen the gap between GRU and TCN.",
-             MX, Inches(6.35), CW)
+        ("Tested on a *chirp* sweep never seen in training (only step/ramp/random/mixed were).", "navy"),
+        ("*EMA collapses* +64% → *+12%*; *Kalman* +56% → *+24%* — they were implicitly tuned to the training spectrum.", "terra"),
+        ("*Neural filters hold*: CNN +73%, GRU +69%, TCN +67% — they learned the dynamics, not the excitation.", "teal"),
+    ], MX, Inches(2.15), Inches(4.5), Inches(3.0), size=15, gap=14)
+    figure(s, "ood_chirp.png",
+           "Fig. 2 — chirp (OOD) trajectory: GRU tracks truth; Kalman lags.",
+           Inches(5.7), Inches(1.95), Inches(6.7))
 
 
 def s10_conclusion():
@@ -427,11 +414,11 @@ def main():
         s03_ph_context,
         s04_ph_ml1a,
         s04b_ph_ml1b,
-        s05_normalization,
-        s06_architectures,
+        s05_task_data,
+        s06_methods,
         s07_results,
-        s08_fig_comparison,
-        s09_analysis,
+        s08_comparison,
+        s09_generalization,
         s10_conclusion,
     ]:
         fn()

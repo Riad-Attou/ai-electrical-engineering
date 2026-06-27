@@ -1,14 +1,21 @@
 """
-Servo dataset preparation — run this once before training.
+Motor + rod speed-filter dataset generation — run once before training.
 
-Reads the pre-recorded Simulink CSVs (chirp + multisine), resamples to a
-uniform 1 ms grid, and saves a ready-to-use split to data/servo_split.npz.
+Generates, from the shared team plant (brushed DC motor with a vertical rod
+load, matlab/param.m parameters):
 
-Also generates a quick overview figure.
+  data/rod_split.npz : in-distribution train/val/test trajectories
+                       (step / ramp / random / mixed excitation), split by
+                       trajectory so there is no leakage.
+  data/rod_ood.npz   : out-of-distribution test trajectories driven by a chirp
+                       (swept-sine) voltage — an excitation family never seen
+                       in training, used to probe generalisation.
+  figures/data_overview.png : one representative trajectory (voltage, true vs
+                       noisy speed, rod angle) plus a few sample trajectories.
 
 Usage
 -----
-python BDCmotor.py
+    python BDCmotor.py
 """
 
 from pathlib import Path
@@ -16,75 +23,115 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.servo import GEAR_RATIO, build_servo_split
+from utils.motor import BDCMotorParams, PendulumParams
+from utils.traj import (
+    TrajectoryConfig,
+    generate_chirp_trajectories,
+    generate_multi_trajectory_dataset,
+    pack_split,
+    split_trajectories,
+)
 
-TRAIN_CSV = Path("test_simulated_dataset/ml2_train_set.csv")
-TEST_CSV  = Path("test_simulated_dataset/ml2_test_set.csv")
-OUT_NPZ   = Path("data/servo_split.npz")
-FIGURES   = Path("figures")
+FIGURES = Path("figures")
+DATA = Path("data")
 FIGURES.mkdir(exist_ok=True)
-Path("data").mkdir(exist_ok=True)
+DATA.mkdir(exist_ok=True)
+
+# Shared team motor+rod plant (matlab/param.m). The same params Alessandro's
+# RL controller uses, so the whole project describes one physical system.
+PARAMS = BDCMotorParams(R=3.0, L=4e-3, Kt=0.05, Kb=0.05, J=7.04e-5, B=0.005, V_max=12.0)
+ROD = PendulumParams(m=0.05, l=0.1, g=9.81)
+
+
+def _save_ood(path: Path, trajs) -> None:
+    """Save OOD chirp trajectories as plain (N, T) arrays."""
+    np.savez(
+        path,
+        noisy=np.stack([t.omega_noisy for t in trajs]),
+        true=np.stack([t.omega_true for t in trajs]),
+        voltage=np.stack([t.voltage for t in trajs]),
+        theta=np.stack([t.theta_true for t in trajs]),
+        dt=1e-3,
+    )
+
+
+def _overview_figure(split, config) -> None:
+    """Presentation-ready overview of the generated data."""
+    T = split.train_noisy.shape[1]
+    t_axis = np.arange(T) * config.dt
+
+    # Pick a representative trajectory with a good speed swing.
+    swing = split.train_true.max(axis=1) - split.train_true.min(axis=1)
+    n = int(np.argmax(swing))
+
+    fig, axes = plt.subplots(3, 1, figsize=(11, 8), sharex=True)
+
+    axes[0].plot(t_axis, split.train_voltage[n], color="C3")
+    axes[0].set_ylabel("Voltage [V]")
+    axes[0].grid(True, alpha=0.3)
+    axes[0].set_title(
+        "Motor + rod filter data — representative trajectory "
+        f"(noise std ≈ {np.mean(config.noise_std_range):.1f} rad/s)"
+    )
+
+    axes[1].plot(t_axis, split.train_noisy[n], alpha=0.35, color="C0", label="noisy measurement")
+    axes[1].plot(t_axis, split.train_true[n], lw=1.6, color="C1", label="true speed")
+    axes[1].set_ylabel("Speed [rad/s]")
+    axes[1].legend(loc="upper right")
+    axes[1].grid(True, alpha=0.3)
+
+    axes[2].plot(t_axis, split.train_noisy[n] - split.train_true[n], color="C2", lw=0.8)
+    axes[2].set_ylabel("Sensor noise\n(noisy − true) [rad/s]")
+    axes[2].set_xlabel("Time [s]")
+    axes[2].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(FIGURES / "data_overview.png", dpi=150)
+    plt.close(fig)
 
 
 def main() -> None:
-    print("Loading and resampling CSVs …")
-    split = build_servo_split(TRAIN_CSV, TEST_CSV, val_frac=0.30, dt=1e-3)
-    split.save(OUT_NPZ)
+    config = TrajectoryConfig(
+        n_trajectories=210,
+        t_end=6.0,
+        dt=1e-3,
+        param_jitter=0.12,
+        noise_std_range=(2.0, 4.0),
+        noise_quant_range=(0.0, 1.0),
+        train_frac=0.70,
+        val_frac=0.15,
+        rod=ROD,
+    )
 
-    T_tr = len(split.train_t)
-    T_va = len(split.val_t)
-    T_te = len(split.test_t)
+    print("Generating in-distribution trajectories …", flush=True)
+    trajs = generate_multi_trajectory_dataset(base_params=PARAMS, config=config, seed=0)
+    train, val, test = split_trajectories(trajs, config=config, seed=42)
+    split = pack_split(train, val, test, dt=config.dt)
+    split.save(DATA / "rod_split.npz")
 
-    print(f"\nSplit saved → {OUT_NPZ}")
-    print(f"  Train  : {T_tr:6d} steps  ({split.train_t[-1]:.1f} s)  "
-          f"  enc_m ∈ [{split.train_enc_m.min():.2f}, {split.train_enc_m.max():.2f}] rad")
-    print(f"  Val    : {T_va:6d} steps  ({split.val_t[-1] - split.val_t[0]:.1f} s)  "
-          f"  enc_m ∈ [{split.val_enc_m.min():.2f}, {split.val_enc_m.max():.2f}] rad")
-    print(f"  Test   : {T_te:6d} steps  ({split.test_t[-1]:.1f} s)  "
-          f"  enc_m ∈ [{split.test_enc_m.min():.2f}, {split.test_enc_m.max():.2f}] rad")
+    T = split.train_noisy.shape[1]
+    print(
+        f"  {config.n_trajectories} trajectories × {T} steps "
+        f"({config.t_end} s @ {config.dt * 1e3:.0f} ms)"
+    )
+    print(f"  train {split.train_noisy.shape}  val {split.val_noisy.shape}  test {split.test_noisy.shape}")
+    print("  saved → data/rod_split.npz")
 
-    # Rigid-coupling sanity check on test set
-    rigid_err = split.test_enc_m / GEAR_RATIO - split.test_theta_l
-    rigid_rmse = float(np.sqrt(np.mean(rigid_err ** 2)))
-    print(f"\nRigid-coupling baseline (enc_m/N) RMSE on test : "
-          f"{rigid_rmse*1e3:.3f} mrad  ({np.degrees(rigid_rmse):.4f} °)")
-    print(f"Max backlash gap (motor side) : {GEAR_RATIO * 0.02:.2f} rad = "
-          f"{np.degrees(GEAR_RATIO * 0.02):.1f} °")
+    print("\nGenerating OOD chirp trajectories …", flush=True)
+    ood = generate_chirp_trajectories(base_params=PARAMS, config=config, n=20, seed=9000)
+    _save_ood(DATA / "rod_ood.npz", ood)
+    print(f"  {len(ood)} chirp trajectories  saved → data/rod_ood.npz")
 
-    # Overview figure
-    _plot_overview(split)
+    # Quick signal report (helps confirm the noise SNR is sensible)
+    sig = float(split.train_true.std())
+    noi = float((split.train_noisy - split.train_true).std())
+    print(
+        f"\n  speed std ≈ {sig:.2f} rad/s   noise std ≈ {noi:.2f} rad/s   "
+        f"SNR ≈ {sig / noi:.1f}×  ({100 * noi / sig:.0f}% noise)"
+    )
 
-
-def _plot_overview(split) -> None:
-    fig, axes = plt.subplots(3, 1, figsize=(13, 8), sharex=False)
-
-    for ax, t, pwm, enc_m, theta_l, title in [
-        (axes[0], split.train_t, split.train_pwm,
-         split.train_enc_m, split.train_theta_l, "Training data (chirp)"),
-        (axes[1], split.val_t,   split.val_pwm,
-         split.val_enc_m,   split.val_theta_l,   "Validation data (chirp, tail)"),
-        (axes[2], split.test_t,  split.test_pwm,
-         split.test_enc_m,  split.test_theta_l,  "Test data (multisine — unseen)"),
-    ]:
-        ax2 = ax.twinx()
-        ax.plot(t, np.degrees(enc_m / split.N), color="C0", lw=0.8, alpha=0.7,
-                label="enc_m/N (rigid)")
-        ax.plot(t, np.degrees(theta_l), color="C1", lw=1.2, ls="--",
-                label="theta_l (true)")
-        ax2.plot(t, pwm, color="C3", lw=0.6, alpha=0.5, label="pwm")
-        ax.set_ylabel("Angle (°)")
-        ax2.set_ylabel("PWM", color="C3")
-        ax2.tick_params(axis="y", labelcolor="C3")
-        ax.set_title(title)
-        ax.legend(loc="upper left", fontsize=8)
-        ax.grid(True, alpha=0.3)
-
-    axes[-1].set_xlabel("Time (s)")
-    plt.tight_layout()
-    out = FIGURES / "data_overview.png"
-    plt.savefig(out, dpi=150)
-    print(f"\nFigure saved → {out}")
-    plt.show()
+    _overview_figure(split, config)
+    print("  overview → figures/data_overview.png")
 
 
 if __name__ == "__main__":
