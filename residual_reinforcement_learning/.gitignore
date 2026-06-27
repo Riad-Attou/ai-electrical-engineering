@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# Office temp/lock files
+~$*
+
+# macOS
+.DS_Store

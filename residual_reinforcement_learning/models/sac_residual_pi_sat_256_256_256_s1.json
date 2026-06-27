@@ -1,0 +1,30 @@
+{
+  "variant": "pi",
+  "timesteps": 300000,
+  "seed": 1,
+  "randomize": false,
+  "Kp": 5.0,
+  "Ki": 2.0,
+  "params": {
+    "R": 3.0,
+    "L": 0.004,
+    "Kt": 0.05,
+    "Kb": 0.05,
+    "J": 7.4e-05,
+    "B": 0.005,
+    "V_max": 12.0
+  },
+  "dv_limit_frac": 0.3,
+  "control_decimation": 10,
+  "alpha": 1.0,
+  "lam": 0.01,
+  "mu": 0.05,
+  "sat_penalty": 0.05,
+  "noise_std": 1.0,
+  "net_arch": [
+    256,
+    256,
+    256
+  ],
+  "saturation_aware": true
+}

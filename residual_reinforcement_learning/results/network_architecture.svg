@@ -1,0 +1,114 @@
+<svg viewBox="0 0 800 350" xmlns="http://www.w3.org/2000/svg" role="img" font-family="'Helvetica Neue', Arial, sans-serif">
+  <title>MLP [64] Architecture</title>
+  <desc>Neural network diagram: 6 input neurons, 64 hidden neurons (ReLU), 1 output neuron (tanh) mapping to delta V</desc>
+
+  <!-- Title -->
+  <text x="400" y="24" text-anchor="middle" font-size="15" font-weight="700" fill="#003366">MLP Policy Network — π_θ : ℝ⁶ → [−1, 1]</text>
+
+  <!-- LAYER HEADERS (single line each, well clear of the nodes) -->
+  <text x="110" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#003366">INPUT · 6 features</text>
+  <text x="400" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#009999">HIDDEN · 64 units · ReLU</text>
+  <text x="690" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#CC6633">OUTPUT · 1 unit · tanh</text>
+
+  <!-- WEIGHT MATRIX LABELS (between columns, in the empty connection band) -->
+  <text x="255" y="78" text-anchor="middle" font-size="10" fill="#777" font-style="italic">W₁ ∈ ℝ⁶⁴ˣ⁶</text>
+  <text x="545" y="78" text-anchor="middle" font-size="10" fill="#777" font-style="italic">W₂ ∈ ℝ¹ˣ⁶⁴</text>
+
+  <!-- CONNECTION LINES input→hidden -->
+  <!-- input x=110 ; hidden x=400 -->
+  <!-- input y: 100,138,176,214,252,290 ; hidden y: 93,128,163,233,268,303 -->
+  <g stroke="#003366" stroke-width="0.5" opacity="0.18">
+    <line x1="150" y1="100" x2="400" y2="93"/><line x1="150" y1="100" x2="400" y2="128"/><line x1="150" y1="100" x2="400" y2="163"/><line x1="150" y1="100" x2="400" y2="233"/><line x1="150" y1="100" x2="400" y2="268"/><line x1="150" y1="100" x2="400" y2="303"/>
+    <line x1="150" y1="138" x2="400" y2="93"/><line x1="150" y1="138" x2="400" y2="128"/><line x1="150" y1="138" x2="400" y2="163"/><line x1="150" y1="138" x2="400" y2="233"/><line x1="150" y1="138" x2="400" y2="268"/><line x1="150" y1="138" x2="400" y2="303"/>
+    <line x1="150" y1="176" x2="400" y2="93"/><line x1="150" y1="176" x2="400" y2="128"/><line x1="150" y1="176" x2="400" y2="163"/><line x1="150" y1="176" x2="400" y2="233"/><line x1="150" y1="176" x2="400" y2="268"/><line x1="150" y1="176" x2="400" y2="303"/>
+    <line x1="150" y1="214" x2="400" y2="93"/><line x1="150" y1="214" x2="400" y2="128"/><line x1="150" y1="214" x2="400" y2="163"/><line x1="150" y1="214" x2="400" y2="233"/><line x1="150" y1="214" x2="400" y2="268"/><line x1="150" y1="214" x2="400" y2="303"/>
+    <line x1="150" y1="252" x2="400" y2="93"/><line x1="150" y1="252" x2="400" y2="128"/><line x1="150" y1="252" x2="400" y2="163"/><line x1="150" y1="252" x2="400" y2="233"/><line x1="150" y1="252" x2="400" y2="268"/><line x1="150" y1="252" x2="400" y2="303"/>
+    <line x1="150" y1="290" x2="400" y2="93"/><line x1="150" y1="290" x2="400" y2="128"/><line x1="150" y1="290" x2="400" y2="163"/><line x1="150" y1="290" x2="400" y2="233"/><line x1="150" y1="290" x2="400" y2="268"/><line x1="150" y1="290" x2="400" y2="303"/>
+  </g>
+  <!-- CONNECTION LINES hidden→output (output y=198) -->
+  <g stroke="#009999" stroke-width="0.5" opacity="0.22">
+    <line x1="440" y1="93"  x2="650" y2="198"/>
+    <line x1="440" y1="128" x2="650" y2="198"/>
+    <line x1="440" y1="163" x2="650" y2="198"/>
+    <line x1="440" y1="233" x2="650" y2="198"/>
+    <line x1="440" y1="268" x2="650" y2="198"/>
+    <line x1="440" y1="303" x2="650" y2="198"/>
+  </g>
+
+  <!-- INPUT NODES -->
+  <g font-size="10.5" fill="#003366" text-anchor="end">
+    <text x="55" y="104">e / e_s</text>
+    <text x="55" y="142">ω / ω_s</text>
+    <text x="55" y="180">sin θ</text>
+    <text x="55" y="218">cos θ</text>
+    <text x="55" y="256">ω* / ω_s</text>
+    <text x="55" y="294">V_base / V_max</text>
+  </g>
+  <g fill="#003366" stroke="white" stroke-width="2">
+    <circle cx="110" cy="100" r="17"/>
+    <circle cx="110" cy="138" r="17"/>
+    <circle cx="110" cy="176" r="17"/>
+    <circle cx="110" cy="214" r="17"/>
+    <circle cx="110" cy="252" r="17"/>
+    <circle cx="110" cy="290" r="17"/>
+  </g>
+  <g font-size="9" fill="white" text-anchor="middle" font-weight="600">
+    <text x="110" y="104">x₁</text>
+    <text x="110" y="142">x₂</text>
+    <text x="110" y="180">x₃</text>
+    <text x="110" y="218">x₄</text>
+    <text x="110" y="256">x₅</text>
+    <text x="110" y="294">x₆</text>
+  </g>
+
+  <!-- HIDDEN NODES -->
+  <g fill="#009999" stroke="white" stroke-width="2">
+    <circle cx="400" cy="93"  r="17"/>
+    <circle cx="400" cy="128" r="17"/>
+    <circle cx="400" cy="163" r="17"/>
+    <circle cx="400" cy="233" r="17"/>
+    <circle cx="400" cy="268" r="17"/>
+    <circle cx="400" cy="303" r="17"/>
+  </g>
+  <g fill="#009999" font-size="22" text-anchor="middle" font-weight="700">
+    <text x="400" y="193">·</text>
+    <text x="400" y="206">·</text>
+    <text x="400" y="219">·</text>
+  </g>
+  <text x="400" y="328" text-anchor="middle" font-size="10" fill="#009999" font-style="italic">× 64 units total</text>
+
+  <!-- OUTPUT NODE -->
+  <circle cx="690" cy="198" r="22" fill="#CC6633" stroke="white" stroke-width="2.5"/>
+  <text x="690" y="202" text-anchor="middle" font-size="10" fill="white" font-weight="700">tanh</text>
+
+  <!-- ARROWS -->
+  <defs>
+    <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#003366"/>
+    </marker>
+    <marker id="arr-teal" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#009999"/>
+    </marker>
+    <marker id="arr-orange" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#CC6633"/>
+    </marker>
+  </defs>
+
+  <line x1="128" y1="198" x2="377" y2="198" stroke="#003366" stroke-width="1.5" marker-end="url(#arr-blue)" opacity="0.4"/>
+  <line x1="418" y1="198" x2="664" y2="198" stroke="#009999" stroke-width="1.5" marker-end="url(#arr-teal)"/>
+  <line x1="713" y1="198" x2="752" y2="198" stroke="#CC6633" stroke-width="2"   marker-end="url(#arr-orange)"/>
+
+  <!-- ΔV box -->
+  <rect x="752" y="180" width="44" height="36" rx="5" fill="#CC6633"/>
+  <text x="774" y="194" text-anchor="middle" font-size="10" fill="white" font-weight="700">ΔV</text>
+  <text x="774" y="208" text-anchor="middle" font-size="9"  fill="white">∈[−1,1]</text>
+
+  <!-- ACTIVATION CHIPS -->
+  <rect x="355" y="333" width="90" height="16" rx="4" fill="#009999" opacity="0.15"/>
+  <text x="400" y="345" text-anchor="middle" font-size="9.5" fill="#009999" font-weight="600">ReLU</text>
+  <rect x="645" y="333" width="100" height="16" rx="4" fill="#CC6633" opacity="0.15"/>
+  <text x="695" y="345" text-anchor="middle" font-size="9.5" fill="#CC6633" font-weight="600">tanh → [−1, 1]</text>
+
+  <!-- PARAM COUNT -->
+  <text x="110" y="345" text-anchor="middle" font-size="9.5" fill="#666">513 params</text>
+</svg>
