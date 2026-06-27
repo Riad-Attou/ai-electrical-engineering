@@ -1,5 +1,5 @@
 """
-10-experiment speed-control comparison for BDC motor + vertical rod.
+12-experiment speed-control comparison for BDC motor + vertical rod.
 
 Experiments
 -----------
@@ -13,9 +13,11 @@ Experiments
   8. PI + polynomial FFW + gravity FFW      — quintic trajectory
   9. PI + full model FFW + gravity FFW      — constant reference
  10. PI + full model FFW + gravity FFW      — quintic trajectory
+ 11. PI + NN FFW                            — constant reference
+ 12. PI + NN FFW                            — quintic trajectory
 
 Run:  python experiments.py   (from project root)
-Output: nn/results/experiments.png
+Output: poly/results/experiments.png
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ import matplotlib.pyplot as plt
 from utils.motor import BDCMotor, BDCMotorParams, PendulumParams, SpeedSensorNoise
 from utils.traj import QuinticTrajectory
 from poly.poly_controller import PolyFeedforwardController
+from nn.nn_controller import NNFeedforwardController
 
 # ---------------------------------------------------------------------------
 # System parameters  (shared across all experiments)
@@ -193,6 +196,23 @@ def _load_poly():
 
 
 # ---------------------------------------------------------------------------
+# Load NN weights (required for experiments 11-12)
+# ---------------------------------------------------------------------------
+_NN_WEIGHTS_PATH = Path(__file__).parent / "nn" / "data" / "nn_weights.npz"
+
+def _load_nn():
+    if not _NN_WEIGHTS_PATH.exists():
+        raise FileNotFoundError(
+            f"NN weights not found: {_NN_WEIGHTS_PATH}\n"
+            "Run:  python -m nn.nn_collect\n"
+            "      python -m nn.nn_fit"
+        )
+    return NNFeedforwardController.from_file(
+        Kp=KP, Ki=KI, params=PARAMS, pendulum=ROD, path=_NN_WEIGHTS_PATH
+    )
+
+
+# ---------------------------------------------------------------------------
 # Simulation helper
 # ---------------------------------------------------------------------------
 
@@ -245,6 +265,7 @@ def _simulate(ctrl, ref_fn) -> dict:
 
 def run_experiments():
     poly_coeffs, omega_min, omega_max = _load_poly()
+    ctrl_nn = _load_nn()
 
     traj = QuinticTrajectory(TRAJ_Q0, TRAJ_QF, TRAJ_T0, TRAJ_TF)
 
@@ -282,6 +303,8 @@ def run_experiments():
         ("PI + poly FFW + grav FFW\ntrajectory",        ctrl_poly_grav,  traj_ref),
         ("PI + full model FFW + grav FFW\nconstant ref", ctrl_model_grav, const_ref),
         ("PI + full model FFW + grav FFW\ntrajectory",   ctrl_model_grav, traj_ref),
+        ("PI + NN FFW\nconstant ref",                    ctrl_nn,         const_ref),
+        ("PI + NN FFW\ntrajectory",                      ctrl_nn,         traj_ref),
     ]
 
     results = []
