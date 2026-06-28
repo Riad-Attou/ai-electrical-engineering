@@ -25,6 +25,33 @@ from utils.dataset import NormStats
 from utils.traj import MotorSplit
 
 
+def _ood_bar(rmse: dict[str, float], raw: float, out: Path) -> None:
+    """Bar chart of OOD RMSE per method — same style as the in-distribution one."""
+    order = [k for k in ("Raw", "EMA", "Kalman", "CNN", "TCN", "GRU") if k in rmse]
+    vals = [rmse[k] for k in order]
+    palette = {"Raw": "#bbbbbb", "EMA": "#e07b00", "Kalman": "#9b59b6",
+               "CNN": "#3498db", "TCN": "#1abc9c", "GRU": "#2ecc71"}
+    colors = [palette.get(k, "#888888") for k in order]
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    bars = ax.bar(order, vals, color=colors, edgecolor="#333", linewidth=0.6)
+    for b, v in zip(bars, vals):
+        pct = 100 * (1 - v / raw)
+        tag = f"{v:.2f}" if b is bars[0] else f"{v:.2f}\n{pct:+.0f}%"
+        ax.text(b.get_x() + b.get_width() / 2, v + 0.04, tag,
+                ha="center", va="bottom", fontsize=9.5, linespacing=1.0)
+    ax.axhline(raw, color="#bbbbbb", ls="--", lw=1.0, zorder=0)
+    ax.set_ylim(0, raw * 1.18)
+    ax.set_ylabel("OOD test RMSE [rad/s]", fontsize=12)
+    ax.set_title("Out-of-distribution (chirp) — classical filters collapse, neural hold",
+                 fontsize=12.5)
+    ax.grid(True, axis="y", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(out, dpi=160)
+    plt.close(fig)
+    print(f"saved -> {out}")
+
+
 def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     figures = Path("figures")
@@ -60,6 +87,8 @@ def main() -> None:
     print("\nOOD (chirp) test-set RMSE [rad/s]:")
     for k, v in rmse.items():
         print(f"  {k:8s} {v:6.3f}   ({100 * (1 - v / raw):+5.1f}% vs Raw)")
+
+    _ood_bar(rmse, raw, figures / "ood_rmse.png")
 
     # ---- overlay plot for one OOD trajectory -----------------------------
     n = 0

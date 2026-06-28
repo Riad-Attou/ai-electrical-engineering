@@ -118,4 +118,5 @@ python eval_ood.py                 # OOD chirp evaluation + figure
 - `figures/comparison_all_methods.png` — one test trajectory, speed + error.
 - `figures/curves_{gru,cnn,tcn}.png` — training curves.
 - `figures/filter_{gru,cnn,tcn}_test.png` — per-model test trajectory.
-- `figures/ood_chirp.png` — OOD generalisation on chirp excitation.
+- `figures/ood_chirp.png` — OOD chirp trajectory: GRU tracks truth, Kalman lags.
+- `figures/ood_rmse.png` — OOD per-method RMSE bar chart (classical collapse, neural hold).

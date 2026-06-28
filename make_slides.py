@@ -218,13 +218,12 @@ def stats(s, items, t):
         para(tf, label.upper(), font=MONO, color=INKSOFT, size=10, before=8, lh=1.1)
 
 
-def figure(s, name, caption, l, t, w):
+def figure(s, name, caption, l, t, w, *, max_h=Inches(4.9)):
     path = FIG / name
     iw, ih = Image.open(path).size
     pad = Inches(0.16)
     disp_w = w - pad * 2
     disp_h = int(disp_w * ih / iw)
-    max_h = Inches(4.35)
     if disp_h > max_h:
         disp_h = max_h
         disp_w = int(disp_h * iw / ih)
@@ -234,7 +233,9 @@ def figure(s, name, caption, l, t, w):
     img_l = l + (w - disp_w) // 2
     s.shapes.add_picture(str(path), img_l, t + pad, width=disp_w, height=disp_h)
     tf = box(s, l + pad, t + pad + disp_h + Inches(0.05), w - pad * 2, cap_h)
-    para(tf, caption, font=MONO, color=INKSOFT, size=11, first=True, lh=1.1)
+    para(tf, caption, font=MONO, color=INKSOFT, size=12, first=True, lh=1.1,
+         align=PP_ALIGN.CENTER)
+    return card_h
 
 
 def tbl(s, rows, l, t, w):
@@ -256,35 +257,7 @@ def tbl(s, rows, l, t, w):
             runs(p, txt, font=fnt, color=col, size=sz)
 
 
-# ── placeholder slide (clean — no boxes, no guidance) ─────────────────────
-
-def placeholder(num, kick, title):
-    s = slide()
-    kicker(s, num, kick)
-    heading(s, title, Inches(1.05), size=30)
-    return s
-
-
 # ── slides ─────────────────────────────────────────────────────────────────
-
-def s01_title():
-    s = slide()
-    kicker(s, "", "AI in Electrical Engineering", top=Inches(0.9))
-    tf = box(s, MX, Inches(1.4), Inches(8.3), Inches(2.0))
-    para(tf, "[Presentation title]", font=SERIF, color=NAVY, size=38, bold=True, first=True, lh=1.04)
-    tf2 = box(s, MX, Inches(3.3), Inches(7.5), Inches(0.7))
-    p = tf2.paragraphs[0]; p.line_spacing = 1.2
-    runs(p, "[Short subtitle — one sentence describing the project]",
-         font=SANS, color=INKSOFT, size=18)
-    meta = [("[Author 1]  ·  [Author 2]", "[Author 3]  ·  [Author 4]"),
-            ("Course", "AI in Electrical Engineering"),
-            ("[University]", "[Year]")]
-    mw = Inches(3.0)
-    for i, (a, b) in enumerate(meta):
-        tf = box(s, MX + mw * i, Inches(4.45), mw - Inches(0.2), Inches(0.8))
-        para(tf, a, font=MONO, color=NAVY, size=12, bold=True, first=True, after=2)
-        para(tf, b, font=MONO, color=INKSOFT, size=11, lh=1.1)
-
 
 def s02_toc():
     s = slide()
@@ -300,18 +273,6 @@ def s02_toc():
         ("IV",  "Conclusion",
          "Key numbers, takeaways, and future directions."),
     ], Inches(2.0))
-
-
-def s03_ph_context():
-    placeholder("01", "Physical setup & dataset", "[Physical setup & dataset]")
-
-
-def s04_ph_ml1a():
-    placeholder("02", "ML1 — motor identification", "[ML1 — motor identification]")
-
-
-def s04b_ph_ml1b():
-    placeholder("02", "ML1 — results", "[ML1 — results & validation]")
 
 
 def s05_task_data():
@@ -381,45 +342,42 @@ def s08_comparison():
         ("A 64-sample *moving average barely helps* — the rod swings fast enough that its lag cancels its smoothing.", "navy"),
         ("*EMA and Kalman* land at 1.1–1.3 rad/s — a useful but limited linear fit.", "terra"),
         ("*GRU / TCN reach 0.65 rad/s* — a 78% cut from the raw sensor and ~51% below the tuned Kalman.", "teal"),
-    ], MX, Inches(2.15), Inches(4.5), Inches(2.6), size=15, gap=14)
+    ], MX, Inches(2.2), Inches(3.95), Inches(3.0), size=15, gap=14)
     figure(s, "comparison_rmse.png",
            "Fig. 1 — test-set RMSE by method (motor + rod, lower is better).",
-           Inches(5.7), Inches(1.7), Inches(6.7))
+           Inches(5.15), Inches(1.95), Inches(7.23))
 
 
 def s09_generalization():
     s = slide()
     kicker(s, "07", "ML2 — generalisation  (unseen excitation)")
     heading(s, "Classical filters break on unseen inputs.", Inches(1.05), size=26)
-    bullets(s, [
-        ("Tested on a *chirp* sweep never seen in training (only step/ramp/random/mixed were).", "navy"),
-        ("*EMA collapses* +64% → *+12%*; *Kalman* +56% → *+24%* — they were implicitly tuned to the training spectrum.", "terra"),
-        ("*Neural filters hold*: CNN +73%, GRU +69%, TCN +67% — they learned the dynamics, not the excitation.", "teal"),
-    ], MX, Inches(2.15), Inches(4.5), Inches(3.0), size=15, gap=14)
-    figure(s, "ood_chirp.png",
-           "Fig. 2 — chirp (OOD) trajectory: GRU tracks truth; Kalman lags.",
-           Inches(5.7), Inches(1.95), Inches(6.7))
-
-
-def s10_conclusion():
-    placeholder("08", "Conclusion", "[Conclusion]")
+    tbl(s, [
+        ("Raw  —  no filter",      "3.00 rad/s      —     reference"),
+        ("EMA  —  tuned",          "2.64 rad/s   +12 %   (was +64 %)"),
+        ("Kalman  —  tuned",       "2.29 rad/s   +24 %   (was +56 %)"),
+        ("TCN",                    "0.98 rad/s   +67 %   holds"),
+        ("GRU",                    "0.93 rad/s   +69 %   holds"),
+        ("*CNN 🏆*",               "*0.81 rad/s*   *+73 %*   holds"),
+    ], MX, Inches(2.25), Inches(4.95))
+    takeaway(s, "Generalisation gap.",
+             "On a *chirp* sweep never seen in training, *EMA and Kalman collapse* — implicitly tuned to the training spectrum — while *neural filters hold +67–73 %*, having learned the dynamics, not the excitation.",
+             MX, Inches(5.1), Inches(4.95), accent="teal", h=Inches(1.7))
+    figure(s, "ood_rmse.png",
+           "Fig. 2 — OOD (chirp) RMSE: classical filters collapse, neural hold.",
+           Inches(6.2), Inches(1.95), Inches(6.18))
 
 
 # ── main ───────────────────────────────────────────────────────────────────
 
 def main():
     for fn in [
-        s01_title,
         s02_toc,
-        s03_ph_context,
-        s04_ph_ml1a,
-        s04b_ph_ml1b,
         s05_task_data,
         s06_methods,
         s07_results,
         s08_comparison,
         s09_generalization,
-        s10_conclusion,
     ]:
         fn()
     prs.save(OUT)
