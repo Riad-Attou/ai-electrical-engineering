@@ -295,6 +295,30 @@ def s05_task_data():
     ], MX, Inches(4.35), CW, Inches(2.6), size=15, gap=11)
 
 
+def s06_ema_properties():
+    s = slide()
+    kicker(s, "04", "ML2 — EMA baseline: variance vs delay")
+    heading(s, "Smoothing always costs delay.", Inches(1.05), size=28)
+    tf = box(s, MX, Inches(2.0), CW, Inches(0.66))
+    p = tf.paragraphs[0]; p.line_spacing = 1.2
+    runs(p, "The EMA is a causal first-order IIR low-pass filter with a single knob α. "
+            "Higher α smooths more aggressively (lower output variance) but also pushes the "
+            "filter's phase lag higher — the two effects are *inseparable*.",
+         font=SANS, color=INKSOFT, size=15)
+    formula(s, [
+        "y[t]  =  (1 − α)·x[t]  +  α·y[t−1]          H(z) = (1−α) / (1 − αz⁻¹)",
+        "Var(y)/Var(x) = (1−α)/(1+α)       DC delay = α/(1−α)·dt",
+    ], MX, Inches(3.0), CW, accent="terra", h=Inches(0.98))
+    figure(s, "ema_properties.png",
+           "Left: amplitude response |H(f)| — higher α narrows the passband (less noise).  "
+           "Right: group delay τ(f) — same α inflates lag at every frequency.",
+           MX, Inches(4.22), CW, max_h=Inches(2.65))
+    takeaway(s, "Tuned α = 0.872.",
+             "Noise std cut to *~26% of raw* (variance × 0.068) — but at *7 ms DC lag*. "
+             "Both figures share the same α axis: you cannot get one without paying for the other.",
+             MX, Inches(6.85), CW, accent="terra", h=Inches(0.55))
+
+
 def s06_methods():
     s = slide()
     kicker(s, "04", "ML2 — methods")
@@ -348,6 +372,30 @@ def s08_comparison():
            Inches(5.15), Inches(1.95), Inches(7.23))
 
 
+def s08b_variance_delay():
+    s = slide()
+    kicker(s, "06b", "ML2 — results: variance & delay")
+    heading(s, "Neural filters win on both axes.", Inches(1.05), size=28)
+    tf = box(s, MX, Inches(2.0), CW, Inches(0.55))
+    p = tf.paragraphs[0]; p.line_spacing = 1.2
+    runs(p, "Variance (RMSE) and phase lag (effective delay) are *independent failure modes*. "
+            "A good filter must minimize both — not just one.",
+         font=SANS, color=INKSOFT, size=15)
+    half = Inches(5.65)
+    gap  = Inches(0.3)
+    figure(s, "metric_variance.png",
+           "Error std (RMSE, rad/s) — lower is better",
+           MX, Inches(2.75), half, max_h=Inches(3.6))
+    figure(s, "metric_delay.png",
+           "Effective phase lag (ms) — lower is better",
+           MX + half + gap, Inches(2.75), half, max_h=Inches(3.6))
+    takeaway(s, "EMA: 7 ms lag, GRU/TCN: 1 ms.",
+             "*EMA halves RMSE vs raw but costs 7 ms of lag* at α = 0.872. "
+             "Neural filters cut RMSE a further 39 % AND reduce lag to one sample — "
+             "faster response, less noise.",
+             MX, Inches(6.6), CW, accent="teal", h=Inches(0.82))
+
+
 def s09_generalization():
     s = slide()
     kicker(s, "07", "ML2 — generalisation  (unseen excitation)")
@@ -374,9 +422,11 @@ def main():
     for fn in [
         s02_toc,
         s05_task_data,
+        s06_ema_properties,
         s06_methods,
         s07_results,
         s08_comparison,
+        s08b_variance_delay,
         s09_generalization,
     ]:
         fn()
