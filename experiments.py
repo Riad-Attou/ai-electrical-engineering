@@ -135,7 +135,7 @@ class _PolyGravPI:
         p, rod, V_max = self._p, self._rod, self._p.V_max
 
         omega_c = np.clip(omega_target, self._omega_min, self._omega_max)
-        V_ff_poly =  float(np.clip(np.polyval(self._coeffs, omega_c), -V_max, V_max))
+        V_ff_poly = float(np.clip(np.polyval(self._coeffs, omega_c), -V_max, V_max))
         V_ff_grav = rod.m * rod.g * rod.l_cm * np.sin(theta) * p.R / p.Kt
 
         e = omega_target - omega_meas

@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 
 DATA_PATH   = Path(__file__).parent / "data" / "poly_data.npz"
 COEFFS_PATH = Path(__file__).parent / "data" / "poly_coeffs.npz"
-DEGREE      = 2  # polynomial degree
+DEGREE      = 1  # polynomial degree
 
 
 def fit():
