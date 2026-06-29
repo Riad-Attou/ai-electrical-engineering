@@ -219,7 +219,7 @@ __marimo__/
 
 # Project outputs (reproducible — not committed)
 data/*.npz
-checkpoints/*.pt
+# checkpoints/*.pt
 
 # Keep directory markers
 !data/.gitkeep
